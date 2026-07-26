@@ -198,14 +198,29 @@ Upload a product image. Multipart form-data, single `file` field.
 
 Response: `{ ok, id, filename, url, size, mime }` (url is public, e.g. `/products/172...jpg`).
 
-### Admin (read-only, no auth in MVP)
-| Route | Returns |
-|---|---|
-| `GET /api/admin/custom-orders` | Latest 200 orders |
-| `GET /api/admin/uploads` | Latest 200 uploads |
-| `GET /api/admin/newsletter` | Latest 500 subscribers |
+### Admin (auth-protected)
 
-> Add authentication before exposing these in production (see “Hardening” in `DEPLOYMENT.md`).
+The `/admin` dashboard is protected by a password stored in `ADMIN_PASSWORD`.
+Login sets an httpOnly HMAC-signed cookie (`sk_admin`, 7-day expiry). Every
+`/api/admin/*` route (except `login`) requires this cookie.
+
+| Route | Method | Purpose |
+|---|---|---|
+| `/api/admin/login` | POST | `{ password }` → sets `sk_admin` cookie |
+| `/api/admin/logout` | POST | Clears the cookie |
+| `/api/admin/me` | GET | `200 { authenticated:true }` if signed in, else `401` |
+| `/api/admin/stats` | GET | Aggregate counts + recent orders (Overview tab) |
+| `/api/admin/custom-orders` | GET | List orders (`?status=new\|accepted\|completed\|all`) |
+| `/api/admin/custom-orders/:id/action` | POST | `{ action, note?, timeline?, sendEmail? }` where `action ∈ { accept, complete, reopen, note }`. `accept` also sends the branded acceptance email with your studio note, timeline and UPI/secured-link payment instructions. |
+| `/api/admin/uploads` | GET | List uploaded product images |
+| `/api/admin/uploads/:id` | DELETE | Remove upload (file + DB row) |
+| `/api/admin/contacts` | GET | Contact-form messages |
+| `/api/admin/newsletter` | GET | Newsletter subscribers |
+| `/api/admin/payments` | GET | Razorpay payments |
+
+**Dashboard UI** lives at **`/admin`** and shares the boutique design language — warm cream palette, serif headings, quiet motion.
+
+> Access it via `https://<your-domain>/admin` (or `http://localhost:3000/admin` in dev). Use the password from `ADMIN_PASSWORD` in `.env`. Rotate the password by changing `ADMIN_PASSWORD` (and optionally `ADMIN_SESSION_SECRET`) and restarting.
 
 ---
 
