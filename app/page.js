@@ -1113,30 +1113,33 @@ function CustomOrderModal({ open, onClose }) {
   }
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl bg-cream border-beige">
-        <DialogHeader>
-          <div className="text-[10px] tracking-[0.3em] uppercase text-terracotta">Personalisation</div>
-          <DialogTitle className="font-serif text-3xl text-charcoal">Start a custom order</DialogTitle>
-          <DialogDescription className="text-charcoal/70">Tell us what you dream of. We reply within 24 hours with a design proposal.</DialogDescription>
-        </DialogHeader>
-        <form onSubmit={submit} className="grid md:grid-cols-2 gap-3">
-          <Input required placeholder="Your name *" value={form.name} onChange={e=>set('name', e.target.value)} className="bg-ivory border-beige" />
-          <Input required placeholder="Phone / WhatsApp *" value={form.contact} onChange={e=>set('contact', e.target.value)} className="bg-ivory border-beige" />
-          <Input required placeholder="Email * (we will send you an acknowledgement)" type="email" value={form.email} onChange={e=>set('email', e.target.value)} className="bg-ivory border-beige md:col-span-2" />
-          <Input placeholder="Product type (e.g. potli, bouquet, blanket)" value={form.productType} onChange={e=>set('productType', e.target.value)} className="bg-ivory border-beige" />
-          <Input placeholder="Occasion (wedding, baby, corporate…)" value={form.occasion} onChange={e=>set('occasion', e.target.value)} className="bg-ivory border-beige" />
-          <Input placeholder="Colour preferences" value={form.colors} onChange={e=>set('colors', e.target.value)} className="bg-ivory border-beige" />
-          <Input placeholder="Size / dimensions" value={form.size} onChange={e=>set('size', e.target.value)} className="bg-ivory border-beige" />
-          <Input placeholder="Budget (INR)" value={form.budget} onChange={e=>set('budget', e.target.value)} className="bg-ivory border-beige" />
-          <Input placeholder="Reference image URL (optional)" value={form.referenceImage} onChange={e=>set('referenceImage', e.target.value)} className="bg-ivory border-beige" />
-          <Textarea placeholder="Additional notes, personalisation, dates…" value={form.notes} onChange={e=>set('notes', e.target.value)} className="bg-ivory border-beige md:col-span-2 min-h-[100px]" />
-          <DialogFooter className="md:col-span-2">
-            <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
-            <Button disabled={busy} type="submit" className="bg-terracotta hover:bg-[color:var(--sk-terracotta-dark)] text-white rounded-full">
-              {busy ? 'Sending…' : 'Send Enquiry'} <Send className="ml-2 h-4 w-4" />
-            </Button>
-          </DialogFooter>
-        </form>
+      <DialogContent className="max-w-2xl bg-cream border-beige p-0 max-h-[92vh] md:max-h-[88vh] flex flex-col overflow-hidden">
+        <div className="flex-1 overflow-y-auto overscroll-contain px-6 py-6 md:px-7">
+          <DialogHeader className="text-left">
+            <div className="text-[10px] tracking-[0.3em] uppercase text-terracotta">Personalisation</div>
+            <DialogTitle className="font-serif text-2xl md:text-3xl text-charcoal">Start a custom order</DialogTitle>
+            <DialogDescription className="text-charcoal/70">Tell us what you dream of. We reply within 24 hours with a design proposal.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={submit} id="custom-order-form" className="mt-5 grid md:grid-cols-2 gap-3">
+            <Input required placeholder="Your name *" value={form.name} onChange={e=>set('name', e.target.value)} className="bg-ivory border-beige" />
+            <Input required placeholder="Phone / WhatsApp *" value={form.contact} onChange={e=>set('contact', e.target.value)} className="bg-ivory border-beige" />
+            <Input required placeholder="Email * (we will send you an acknowledgement)" type="email" value={form.email} onChange={e=>set('email', e.target.value)} className="bg-ivory border-beige md:col-span-2" />
+            <Input placeholder="Product type (e.g. potli, bouquet, blanket)" value={form.productType} onChange={e=>set('productType', e.target.value)} className="bg-ivory border-beige" />
+            <Input placeholder="Occasion (wedding, baby, corporate…)" value={form.occasion} onChange={e=>set('occasion', e.target.value)} className="bg-ivory border-beige" />
+            <Input placeholder="Colour preferences" value={form.colors} onChange={e=>set('colors', e.target.value)} className="bg-ivory border-beige" />
+            <Input placeholder="Size / dimensions" value={form.size} onChange={e=>set('size', e.target.value)} className="bg-ivory border-beige" />
+            <Input placeholder="Budget (INR)" value={form.budget} onChange={e=>set('budget', e.target.value)} className="bg-ivory border-beige" />
+            <Input placeholder="Reference image URL (optional)" value={form.referenceImage} onChange={e=>set('referenceImage', e.target.value)} className="bg-ivory border-beige" />
+            <Textarea placeholder="Additional notes, personalisation, dates…" value={form.notes} onChange={e=>set('notes', e.target.value)} className="bg-ivory border-beige md:col-span-2 min-h-[110px]" />
+          </form>
+        </div>
+        <DialogFooter className="p-4 md:p-5 bg-cream border-t border-beige flex-shrink-0 gap-2">
+          <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button disabled={busy} type="submit" form="custom-order-form"
+                  className="bg-terracotta hover:bg-[color:var(--sk-terracotta-dark)] text-white rounded-full">
+            {busy ? 'Sending…' : 'Send Enquiry'} <Send className="ml-2 h-4 w-4" />
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )
@@ -1150,7 +1153,8 @@ function FloatingCTA({ onOpenCustom }) {
   }, [])
   return (
     <div className={`fixed bottom-5 right-5 z-40 flex flex-col items-end gap-3 transition-all duration-500 ${show ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}`}>
-      <button onClick={onOpenCustom} className="hidden md:inline-flex items-center gap-2 rounded-full bg-charcoal text-cream px-4 py-2.5 shadow-lg hover:bg-black text-sm">
+      <button onClick={onOpenCustom}
+              className="inline-flex items-center gap-2 rounded-full bg-charcoal text-cream px-3.5 py-2 md:px-4 md:py-2.5 shadow-lg hover:bg-black text-xs md:text-sm">
         <Sparkles className="h-4 w-4" /> Custom Order
       </button>
       <a href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent('Hi SutraKriti!')}`} target="_blank" rel="noreferrer"

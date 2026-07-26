@@ -897,72 +897,152 @@ agent_communication:
         - Screenshot: modal-desktop-top.png
       
       Mobile (390×844):
-        - Opened Terracotta Tote Bag modal
-        - "Order on WhatsApp" button: DIRECTLY VISIBLE (no scroll needed)
-        - Modal scrollable container working correctly
-        - Screenshot: modal-mobile-scroll.png
+
+agent_communication:
+  - agent: "main"
+    message: |
+      BUG FIX — Please verify TWO issues on the Custom Order flow.
+
+      Base URL: NEXT_PUBLIC_BASE_URL from /app/.env
+      Do NOT test unrelated flows.
+
+      ISSUE 1 — Custom Order modal cannot be scrolled flexibly
+        Root cause: <CustomOrderModal /> DialogContent had no internal scroll area;
+        on shorter viewports (mobile especially) the notes textarea + footer buttons
+        went below the fold with no way to scroll the modal body.
+        Fix (same pattern as ProductModal): DialogContent is now
+          `max-w-2xl bg-cream border-beige p-0 max-h-[92vh] md:max-h-[88vh] flex flex-col overflow-hidden`
+        The header + form are inside a `flex-1 overflow-y-auto overscroll-contain`
+        scroll container; the DialogFooter is a fixed-height footer at the bottom
+        (Cancel / Send Enquiry buttons always visible). The submit button remains
+        wired to the form via `form="custom-order-form"`.
+
+        Verify at BOTH desktop (1920x1080) and mobile (390x844):
+          1. Open the Custom Order modal (click Nav "Custom Order" or the
+             floating "Custom Order" pill).
+          2. Confirm the "Send Enquiry" and "Cancel" buttons are always visible
+             in the footer, even before scrolling.
+          3. Scroll INSIDE the modal (mouse wheel on desktop / touch on mobile)
+             from the Name field down to the Notes textarea — the scroll should
+             happen inside the dialog body without moving the page beneath.
+          4. Fill in the required fields (name, contact, email) and click Send
+             Enquiry — expect a success toast. (You may use a fake email like
+             test-modal@example.com.)
+
+      ISSUE 2 — Floating "Custom Order" button not visible on mobile
+        Root cause: The FloatingCTA had `hidden md:inline-flex` on the Custom Order
+        pill, so it was invisible below the md breakpoint.
+        Fix: Class is now `inline-flex ... px-3.5 py-2 md:px-4 md:py-2.5 text-xs md:text-sm`
+        (visible on all breakpoints, slightly smaller on mobile).
+
+        Verify at mobile viewport (390x844):
+          1. Load the home page.
+          2. Scroll down past 500px so the FloatingCTA appears (it fades in after
+             500px of scroll).
+          3. In the bottom-right corner, verify BOTH pills are visible:
+             - A dark "Custom Order" pill (with sparkle icon)
+             - A green circular WhatsApp button below/next to it
+          4. Tap the "Custom Order" pill → the Custom Order modal opens.
+          5. Also verify the same pill still shows on desktop (should be visible
+             on 1920x1080 too — the fix does NOT hide it on desktop).
+
+      Regression checks:
+        - Product modal image carousel still works (Terracotta Tote Bag → 3 images).
+        - Featured Collections still shows 6 cards on mobile.
+        - Zero hydration errors in console.
+
+      Report PASS only if both issues are cleanly fixed with zero regressions.
+
+  - agent: "testing"
+    message: |
+      ✅ BOTH BUG FIXES VERIFIED - 100% PASS (Custom Order Modal & Floating CTA)
       
-      Result: Modal scroll fix is working BETTER than expected — buttons are directly
-      visible on both viewports without needing to scroll. The flex-1 overflow-y-auto
-      container is properly sized and content fits within viewport.
+      Comprehensive testing completed on TWO reported issues:
       
-      **ISSUE 2 - CATALOGUE PERFORMANCE: ✅ VERIFIED FIXED**
-      Lazy Loading:
-        - Found 8 catalogue images with loading="lazy" attribute
-        - Requirement was >= 4, achieved 8/8 (100%)
-        - Featured Collections and Gallery images also have lazy loading
+      **ISSUE 1 - CUSTOM ORDER MODAL SCROLL: ✅ VERIFIED FIXED**
+      Desktop (1920×1080):
+        - ✅ Clicked desktop nav "Custom Order" button → modal opened
+        - ✅ Footer buttons (Cancel & Send Enquiry) are VISIBLE in fixed footer
+        - ✅ Modal has internal scroll container (.overflow-y-auto)
+        - ✅ Footer buttons remain VISIBLE after scrolling
+        - ✅ Modal body scrolls internally without moving page behind
+        - Screenshot: desktop-custom-modal.png
       
-      Category Filtering (Desktop):
-        - All: 8 products displayed
-        - Handbags: 2 products displayed
-        - Potli Bags: 1 product displayed
-        - Flowers: 2 products displayed
-        - Home Decor: 3 products displayed
-        - Filtering is INSTANT with no layout thrash
-        - No Framer Motion layout animations causing reflow
+      Mobile (390×844):
+        - ✅ Tapped floating "Custom Order" pill → modal opened
+        - ✅ Footer buttons (Cancel & Send Enquiry) are VISIBLE in fixed footer on mobile
+        - ✅ Modal has internal scroll container on mobile
+        - ✅ Modal body scrolls internally (scrollTop: 64px)
+        - ✅ Footer buttons remain VISIBLE after scrolling on mobile
+        - ✅ Filled required fields (name, contact, email: test-modal@example.com)
+        - ✅ Clicked "Send Enquiry" → Success toast displayed: "Enquiry received. We will reach out within 24 hours."
+        - Screenshots: mobile-custom-modal-top.png, mobile-custom-modal-scrolled.png
       
-      Result: Catalogue performance is significantly improved. Category switching is
-      snappy and smooth. Lazy loading working correctly on all product images.
+      Result: Custom Order modal scroll fix is working PERFECTLY on both desktop and mobile.
+      The DialogContent has max-h-[92vh] md:max-h-[88vh] flex flex-col overflow-hidden with
+      an inner flex-1 overflow-y-auto scroll area and a fixed footer. Footer buttons (Cancel
+      & Send Enquiry) remain visible at all times. Modal scrolls internally without moving
+      the page behind. Form submission works correctly.
       
-      **ISSUE 3 - IMAGE CAROUSEL: ✅ VERIFIED FIXED**
-      Terracotta Tote Bag (3 images):
-        - ✅ Left/right arrow buttons present (aria-label="Previous image" and "Next image")
-        - ✅ Counter chip shows "1 / 3" initially
-        - ✅ 3 dot indicators present at bottom
-        - ✅ Clicking "Next image" → counter updates to "2 / 3", image src changes
-        - ✅ Clicking third dot → counter updates to "3 / 3", image jumps
-        - ✅ Keyboard ArrowRight → counter wraps to "1 / 3" (from last image)
-        - ✅ Keyboard ArrowLeft → counter wraps to "3 / 3" (from first image)
-        - ✅ Mouse drag/swipe left → image advances to next
-        - Screenshot: carousel-terracotta.png
+      **ISSUE 2 - FLOATING CUSTOM ORDER BUTTON VISIBILITY: ✅ VERIFIED FIXED**
+      Desktop (1920×1080):
+        - ✅ Scrolled down 600px → FloatingCTA appeared
+        - ✅ Floating "Custom Order" pill is VISIBLE on desktop (with sparkle icon)
+        - ✅ Floating WhatsApp button is VISIBLE on desktop (green circular button)
+        - Screenshot: desktop-floating-cta.png
       
-      Ivory Market Tote (2 images):
-        - ✅ Arrow buttons present
-        - ✅ Counter chip shows "1 / 2" initially
-        - ✅ 2 dot indicators present
-        - ✅ Clicking "Next image" → counter updates to "2 / 2"
-        - Screenshot: carousel-ivory.png
+      Mobile (390×844):
+        - ✅ Scrolled down 600px → FloatingCTA appeared
+        - ✅ Floating "Custom Order" pill is VISIBLE on mobile (with sparkle icon)
+        - ✅ Floating WhatsApp button is VISIBLE on mobile (green circular button)
+        - ✅ Tapped "Custom Order" pill → modal opened successfully
+        - Screenshot: mobile-floating-cta.png
       
-      Result: ProductGallery component working perfectly with all features:
-      arrows, counter, dots, keyboard navigation, and drag/swipe gestures.
+      Result: Floating Custom Order button is now VISIBLE on both mobile and desktop after
+      scrolling past 500px. The class changed from `hidden md:inline-flex` to `inline-flex
+      ... px-3.5 py-2 md:px-4 md:py-2.5 text-xs md:text-sm`, making it visible on all
+      breakpoints with responsive sizing.
       
       **REGRESSION CHECKS: ✅ ALL PASS**
-      - ✅ Zero hydration errors detected (no "server rendered HTML didn't match" warnings)
-      - ✅ Featured Collections shows all 6 cards on mobile (390×844)
-      - ✅ All 6 product images loaded on mobile (naturalWidth > 0 for all)
-      - ✅ Catalogue shows 8 products in 2-column grid on mobile
+      Product Modal Image Carousel (Desktop):
+        - ✅ Opened "Terracotta Tote Bag" → 3 images
+        - ✅ Carousel arrows (Previous & Next) are VISIBLE
+        - ✅ Counter chip shows "1 / 3" initially
+        - ✅ 3 dot indicators present
+        - ✅ Clicked "Next image" → counter updated to "2 / 3"
+        - ✅ Pressed ArrowRight → counter updated to "3 / 3"
+        - ✅ Clicked first dot → counter updated to "1 / 3"
+        - ✅ All carousel navigation methods working (arrows, dots, keyboard)
+        - Screenshot: desktop-carousel.png
+      
+      Featured Collections (Mobile & Desktop):
+        - ✅ All 6 featured collection cards present on mobile (390×844)
+        - ✅ All 6 images loaded successfully on mobile (naturalWidth > 0)
+        - ✅ All 6 featured collection cards present on desktop (1920×1080)
+        - Screenshots: mobile-collections.png, desktop-collections.png
+      
+      Console & Hydration:
+        - ✅ Zero hydration errors detected (no "server rendered HTML didn't match" warnings)
+        - ✅ Zero console errors detected
       
       **SCREENSHOTS CAPTURED:**
-      - modal-desktop-top.png (desktop modal with WhatsApp button visible)
-      - modal-mobile-scroll.png (mobile modal with WhatsApp button visible)
-      - carousel-terracotta.png (3-image carousel with controls)
-      - carousel-ivory.png (2-image carousel with controls)
+      Desktop:
+        - desktop-custom-modal.png (Custom Order modal with footer buttons visible)
+        - desktop-floating-cta.png (Floating Custom Order pill & WhatsApp button)
+        - desktop-carousel.png (Product modal with 3-image carousel, counter "1 / 3")
+        - desktop-collections.png (Featured Collections with 6 cards)
+      
+      Mobile:
+        - mobile-custom-modal-top.png (Custom Order modal before scrolling)
+        - mobile-custom-modal-scrolled.png (Success toast after form submission)
+        - mobile-floating-cta.png (Floating Custom Order pill & WhatsApp button)
+        - mobile-collections.png (Featured Collections with 6 cards)
       
       **FINAL VERDICT:**
-      All three issues are COMPLETELY FIXED with zero regressions. The product modal
-      scroll fix works perfectly on both desktop and mobile. Catalogue performance is
-      significantly improved with lazy loading and removal of layout animations. Image
-      carousel is fully functional with all navigation methods (arrows, dots, keyboard,
-      swipe). No hydration errors. All regression checks pass.
+      Both issues are COMPLETELY FIXED with zero regressions. Custom Order modal scroll
+      works perfectly on both desktop and mobile with fixed footer buttons always visible.
+      Floating Custom Order button is now visible on both mobile and desktop. Product modal
+      image carousel still works perfectly. Featured Collections shows all 6 cards on both
+      viewports. Zero hydration errors. All regression checks pass.
       
       READY FOR PRODUCTION. 🎉
