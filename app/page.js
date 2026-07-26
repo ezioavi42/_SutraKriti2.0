@@ -131,7 +131,22 @@ function MorphingWord() {
   )
 }
 
+function BrandLogo({ className = '', showText = false }) {
+  return (
+    <span className={`inline-flex items-center gap-2 ${className}`}>
+      <img
+        src="/brand/sutrakriti-logo.png"
+        alt="SutraKriti — handcrafted crochet"
+        className="w-auto h-full object-contain"
+        draggable={false}
+      />
+      {showText && <span className="sr-only">SutraKriti</span>}
+    </span>
+  )
+}
+
 function LogoMark({ className = '' }) {
+  // Legacy SVG mark, kept for any inline decorative use.
   return (
     <svg viewBox="0 0 64 64" className={className} aria-hidden>
       <defs>
@@ -155,6 +170,7 @@ function Nav({ onOpenCustom }) {
   const items = [
     { label: 'Collections', href: '#collections' },
     { label: 'Story', href: '#story' },
+    { label: 'Philosophy', href: '#philosophy' },
     { label: 'Process', href: '#process' },
     { label: 'Gallery', href: '#gallery' },
     { label: 'FAQ', href: '#faq' },
@@ -162,9 +178,10 @@ function Nav({ onOpenCustom }) {
   return (
     <header className={`fixed top-0 inset-x-0 z-50 transition-all duration-500 ${scrolled ? 'backdrop-blur-md bg-[rgba(247,241,229,0.85)] border-b border-beige' : 'bg-transparent'}`}>
       <div className="container flex items-center justify-between h-16 md:h-20">
-        <a href="#top" className="flex items-center gap-2">
-          <LogoMark className="h-8 w-8" />
-          <span className="font-serif text-2xl tracking-tight text-charcoal">SutraKriti</span>
+        <a href="#top" className="flex items-center" aria-label="SutraKriti home">
+          <div className="h-12 md:h-14">
+            <BrandLogo className="h-full" />
+          </div>
         </a>
         <nav className="hidden md:flex items-center gap-8">
           {items.map(i => (
@@ -182,7 +199,10 @@ function Nav({ onOpenCustom }) {
             <Button variant="ghost" size="icon" className="md:hidden text-charcoal"><Menu className="h-5 w-5" /></Button>
           </SheetTrigger>
           <SheetContent side="right" className="bg-cream">
-            <SheetHeader><SheetTitle className="font-serif text-2xl">SutraKriti</SheetTitle></SheetHeader>
+            <SheetHeader>
+              <SheetTitle className="sr-only">SutraKriti</SheetTitle>
+              <div className="h-16"><BrandLogo className="h-full" /></div>
+            </SheetHeader>
             <nav className="mt-8 flex flex-col gap-5">
               {items.map(i => <a key={i.href} href={i.href} className="text-lg text-charcoal">{i.label}</a>)}
               <Button onClick={onOpenCustom} variant="outline" className="mt-4">Custom Order</Button>
@@ -339,6 +359,76 @@ function TrustMarquee() {
   )
 }
 
+function PhilosophySection() {
+  return (
+    <section id="philosophy" className="relative py-24 md:py-32 bg-beige/60 overflow-hidden">
+      <div className="absolute inset-0 pointer-events-none opacity-70" style={{
+        background: 'radial-gradient(700px 380px at 15% 30%, rgba(201,169,97,0.18), transparent 60%), radial-gradient(700px 380px at 85% 70%, rgba(183,106,75,0.14), transparent 60%)'
+      }} />
+      <div className="container relative z-10 grid md:grid-cols-12 gap-10 md:gap-16 items-center">
+        <motion.div
+          initial={{ opacity: 0, y: 40 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: '-100px' }}
+          transition={{ duration: 0.9 }} className="md:col-span-6"
+        >
+          <span className="text-[11px] tracking-[0.3em] uppercase text-terracotta">Our Philosophy</span>
+          <h2 className="mt-3 font-serif text-4xl md:text-6xl leading-[1.02] text-charcoal">
+            Handmade <span className="italic text-brown">with purpose.</span>
+          </h2>
+          <p className="mt-6 text-charcoal/75 text-lg leading-relaxed max-w-xl">
+            We believe meaningful things take time. That is why every SutraKriti creation is made <em className="not-italic text-terracotta">carefully</em>, rather than quickly.
+          </p>
+          <p className="mt-4 text-charcoal/70 leading-relaxed max-w-xl">
+            Each piece is crafted to celebrate creativity, quality, and individuality — offering something that feels personal rather than mass-produced.
+          </p>
+          <div className="mt-8 flex flex-wrap gap-2">
+            {['Slow', 'Intentional', 'Personal', 'Never Mass-Produced'].map(t => (
+              <span key={t} className="text-[11px] tracking-[0.2em] uppercase text-charcoal/70 border border-charcoal/15 rounded-full px-3 py-1 bg-cream/70">{t}</span>
+            ))}
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, scale: 0.92 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true, margin: '-100px' }}
+          transition={{ duration: 1, ease: [0.2, 0.8, 0.2, 1] }}
+          className="md:col-span-6 relative"
+        >
+          <div className="relative mx-auto max-w-md aspect-square">
+            {/* Decorative concentric rings echoing the logo's mandala */}
+            <div className="absolute inset-0 rounded-full border border-terracotta/25" />
+            <div className="absolute inset-4 rounded-full border border-terracotta/20" />
+            <div className="absolute inset-10 rounded-full border border-terracotta/15" />
+            <div className="absolute inset-0 rounded-full" style={{
+              background: 'radial-gradient(circle at 50% 45%, rgba(251,247,238,0.9), rgba(233,221,199,0.5) 70%, transparent 90%)'
+            }} />
+            <img
+              src="/brand/sutrakriti-logo.png"
+              alt="SutraKriti mandala"
+              className="absolute inset-6 md:inset-10 w-[calc(100%-3rem)] md:w-[calc(100%-5rem)] h-[calc(100%-3rem)] md:h-[calc(100%-5rem)] object-contain drop-shadow-[0_20px_40px_rgba(109,76,54,0.25)]"
+            />
+            {/* Tiny sparkles orbiting */}
+            {Array.from({ length: 6 }).map((_, i) => {
+              const angle = (i / 6) * Math.PI * 2
+              const r = 46
+              const left = 50 + Math.cos(angle) * r
+              const top = 50 + Math.sin(angle) * r
+              return (
+                <motion.span
+                  key={i}
+                  initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
+                  transition={{ delay: 0.4 + i * 0.1, duration: 0.6 }}
+                  className="absolute h-1.5 w-1.5 rounded-full bg-terracotta/70"
+                  style={{ left: `${left}%`, top: `${top}%` }}
+                />
+              )
+            })}
+          </div>
+          <div className="mt-6 text-center text-[11px] tracking-[0.3em] uppercase text-charcoal/50">— Every thread, intentional —</div>
+        </motion.div>
+      </div>
+    </section>
+  )
+}
+
 function StorySection() {
   return (
     <section id="story" className="relative py-24 md:py-32 bg-cream">
@@ -351,11 +441,11 @@ function StorySection() {
           <h2 className="mt-4 font-serif text-4xl md:text-6xl leading-[1.02] text-charcoal">A brand born<br /><span className="italic text-brown">between the threads.</span></h2>
           <p className="mt-6 text-charcoal/70 leading-relaxed">
             SutraKriti began in a small room, with a single ball of yarn and a lot of patience.
-            What started as a quiet ritual became a devotion — to the slow, to the handmade, to the beautiful things that take time.
+            What started as my mother’s quiet ritual became her devotion — to the slow, to the handmade, to the beautiful things that take time.
           </p>
           <p className="mt-4 text-charcoal/70 leading-relaxed">
-            Every piece we make is a conversation between artisan and thread.
-            No two are exactly alike — because no two moments of making are the same.
+            Every SutraKriti piece is handcrafted by my mother, one stitch at a time. Every knot holds her patience. Every colour, her choice.
+            Every creation is a quiet conversation between her hands and the thread — which is why no two are ever exactly alike.
           </p>
           <div className="mt-8 flex items-center gap-6">
             <div>
@@ -739,9 +829,8 @@ function Footer({ onOpenCustom }) {
     <footer className="bg-[color:var(--sk-charcoal)] text-cream/85">
       <div className="container py-16 grid md:grid-cols-12 gap-10">
         <div className="md:col-span-5">
-          <div className="flex items-center gap-2">
-            <LogoMark className="h-9 w-9" />
-            <span className="font-serif text-3xl text-white">SutraKriti</span>
+          <div className="h-20 md:h-24 -ml-2 brightness-110">
+            <BrandLogo className="h-full" />
           </div>
           <p className="mt-4 max-w-md text-white/70">Handcrafted crochet, woven with love. Every thread tells a story. Every creation is a masterpiece.</p>
           <div className="mt-6 flex items-center gap-4 text-white/90">
@@ -958,6 +1047,7 @@ function App() {
       <Hero onOpenCustom={() => setCustomOpen(true)} />
       <TrustMarquee />
       <StorySection />
+      <PhilosophySection />
       <Collections products={products} onView={setViewing} />
       <Catalogue products={products} onView={setViewing} />
       <WhySection />

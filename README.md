@@ -300,7 +300,8 @@ curl -s -X POST http://localhost:3000/api/newsletter \
 
 ## 🚀 Deployment
 
-See **[DEPLOYMENT.md](./DEPLOYMENT.md)** for a step-by-step guide to deploying on **MilesWeb Node.js Hosting**, plus alternatives (Vercel, Docker).
+- **Local development** \u2192 see **[LOCAL_DEV.md](./LOCAL_DEV.md)** for a step-by-step guide (with a one-shot `scripts/setup-local.sh` installer).
+- **Production** \u2192 see **[DEPLOYMENT.md](./DEPLOYMENT.md)** for MilesWeb Node.js Hosting, plus Vercel & Docker alternatives.
 
 ---
 
