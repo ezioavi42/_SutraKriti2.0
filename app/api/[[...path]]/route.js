@@ -4,15 +4,45 @@ import crypto from 'crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { query, initSchema } from '@/lib/db'
-import { sendMail, renderCustomOrderEmail, isMailConfigured } from '@/lib/mailer'
+import { sendMail, renderCustomOrderEmail, renderOrderAcceptanceEmail, isMailConfigured } from '@/lib/mailer'
 import { PRODUCTS } from '@/lib/products'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
+const ADMIN_COOKIE = 'sk_admin'
+const ADMIN_MAX_AGE = 7 * 24 * 60 * 60 // 7 days
+
+function adminSecret() {
+  return process.env.ADMIN_SESSION_SECRET || process.env.ADMIN_PASSWORD || 'change-me'
+}
+function signAdminToken() {
+  const ts = Date.now().toString()
+  const sig = crypto.createHmac('sha256', adminSecret()).update(ts).digest('hex')
+  return `${ts}.${sig}`
+}
+function verifyAdminToken(token) {
+  if (!token || typeof token !== 'string') return false
+  const [ts, sig] = token.split('.')
+  if (!ts || !sig) return false
+  const age = Date.now() - Number(ts)
+  if (!Number.isFinite(age) || age < 0 || age > ADMIN_MAX_AGE * 1000) return false
+  const exp = crypto.createHmac('sha256', adminSecret()).update(ts).digest('hex')
+  try {
+    return sig.length === exp.length &&
+      crypto.timingSafeEqual(Buffer.from(sig, 'hex'), Buffer.from(exp, 'hex'))
+  } catch { return false }
+}
+function isAdmin(request) {
+  const cookie = request.headers.get('cookie') || ''
+  const m = cookie.match(new RegExp(`(?:^|;\\s*)${ADMIN_COOKIE}=([^;]+)`))
+  if (!m) return false
+  return verifyAdminToken(decodeURIComponent(m[1]))
+}
+
 function cors(res) {
   res.headers.set('Access-Control-Allow-Origin', process.env.CORS_ORIGINS || '*')
-  res.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+  res.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS')
   res.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-upload-token')
   res.headers.set('Access-Control-Allow-Credentials', 'true')
   return res
@@ -205,18 +235,169 @@ async function handleRoute(request, { params }) {
     // Upload endpoint (token-protected)
     if (route === '/upload' && method === 'POST') return handleUpload(request)
 
-    // Admin (read-only for MVP)
-    if (route === '/admin/custom-orders' && method === 'GET') {
-      const rows = await query('SELECT * FROM custom_orders ORDER BY created_at DESC LIMIT 200')
-      return ok({ orders: rows })
+    // ---------------- Admin ----------------
+    // Login
+    if (route === '/admin/login' && method === 'POST') {
+      const body = await request.json().catch(() => ({}))
+      const expected = process.env.ADMIN_PASSWORD
+      if (!expected) return err('admin_not_configured', 500, {
+        message: 'ADMIN_PASSWORD is not set on the server.'
+      })
+      if (!body.password || body.password !== expected) return err('invalid_credentials', 401)
+      const token = signAdminToken()
+      const res = ok({ ok: true })
+      const isHttps = (process.env.NEXT_PUBLIC_BASE_URL || '').startsWith('https://')
+      res.headers.set('Set-Cookie',
+        `${ADMIN_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${ADMIN_MAX_AGE}${isHttps ? '; Secure' : ''}`
+      )
+      return res
     }
-    if (route === '/admin/uploads' && method === 'GET') {
-      const rows = await query('SELECT * FROM uploads ORDER BY created_at DESC LIMIT 200')
-      return ok({ uploads: rows })
+    if (route === '/admin/logout' && method === 'POST') {
+      const res = ok({ ok: true })
+      res.headers.set('Set-Cookie', `${ADMIN_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`)
+      return res
     }
-    if (route === '/admin/newsletter' && method === 'GET') {
-      const rows = await query('SELECT email, subscribed_at FROM newsletter ORDER BY subscribed_at DESC LIMIT 500')
-      return ok({ subscribers: rows })
+    if (route === '/admin/me' && method === 'GET') {
+      if (!isAdmin(request)) return err('unauthorised', 401)
+      return ok({ authenticated: true })
+    }
+
+    // Every other /admin/* route requires auth
+    if (route.startsWith('/admin/')) {
+      if (!isAdmin(request)) return err('unauthorised', 401)
+
+      if (route === '/admin/stats' && method === 'GET') {
+        const [orders] = await Promise.all([
+          query(`SELECT
+              COUNT(*) AS total,
+              SUM(status='new') AS pending,
+              SUM(status='accepted') AS accepted,
+              SUM(status='completed') AS completed
+            FROM custom_orders`),
+        ])
+        const [uploads] = await query('SELECT COUNT(*) AS n FROM uploads').then(r => [r])
+        const [subs]    = await query('SELECT COUNT(*) AS n FROM newsletter').then(r => [r])
+        const [contacts]= await query('SELECT COUNT(*) AS n FROM contacts').then(r => [r])
+        const [payments]= await query(`SELECT COUNT(*) AS n, COALESCE(SUM(status='paid'),0) AS paid FROM payments`).then(r => [r])
+        const recent = await query('SELECT id, name, product_type, occasion, status, created_at FROM custom_orders ORDER BY created_at DESC LIMIT 5')
+        return ok({
+          orders: orders?.[0] || { total: 0, pending: 0, accepted: 0, completed: 0 },
+          uploads: Number(uploads?.[0]?.n || 0),
+          newsletter: Number(subs?.[0]?.n || 0),
+          contacts: Number(contacts?.[0]?.n || 0),
+          payments: payments?.[0] || { n: 0, paid: 0 },
+          recent,
+        })
+      }
+
+      if (route === '/admin/custom-orders' && method === 'GET') {
+        const url = new URL(request.url)
+        const status = url.searchParams.get('status')
+        const rows = status && status !== 'all'
+          ? await query('SELECT * FROM custom_orders WHERE status=? ORDER BY created_at DESC LIMIT 500', [status])
+          : await query('SELECT * FROM custom_orders ORDER BY created_at DESC LIMIT 500')
+        return ok({ orders: rows })
+      }
+
+      // Order actions: accept | complete | reopen | note
+      // POST /admin/custom-orders/:id/action  { action, note?, timeline?, sendEmail? }
+      const mAction = route.match(/^\/admin\/custom-orders\/([^/]+)\/action$/)
+      if (mAction && method === 'POST') {
+        const id = mAction[1]
+        const body = await request.json().catch(() => ({}))
+        const action = String(body.action || '').toLowerCase()
+        const rows = await query('SELECT * FROM custom_orders WHERE id=?', [id])
+        if (!rows.length) return err('order not found', 404)
+        const order = rows[0]
+
+        let newStatus = order.status, emailStatus = 'skipped', emailError = null
+        if (action === 'accept') {
+          newStatus = 'accepted'
+          await query(
+            `UPDATE custom_orders SET status='accepted', accepted_at=CURRENT_TIMESTAMP, admin_note=COALESCE(?, admin_note) WHERE id=?`,
+            [body.note ?? null, id]
+          )
+          if (body.sendEmail !== false) {
+            if (!order.email) {
+              emailStatus = 'no_email'
+            } else if (!isMailConfigured()) {
+              emailStatus = 'smtp_not_configured'
+            } else {
+              try {
+                const orderCamel = {
+                  name: order.name, email: order.email, contact: order.contact,
+                  productType: order.product_type, occasion: order.occasion,
+                  colors: order.colors, size: order.size,
+                }
+                const { html, text, subject } = renderOrderAcceptanceEmail(orderCamel, {
+                  timeline: body.timeline || undefined,
+                  note: body.note || undefined,
+                })
+                const r = await sendMail({ to: order.email, subject, html, text, replyTo: process.env.ORDERS_EMAIL })
+                emailStatus = r.ok ? 'sent' : 'failed'
+                if (r.ok) {
+                  await query('UPDATE custom_orders SET acceptance_email_sent_at=CURRENT_TIMESTAMP WHERE id=?', [id])
+                }
+              } catch (e) {
+                emailStatus = 'failed'; emailError = e?.message
+                console.error('[admin] acceptance email failed:', e)
+              }
+            }
+          }
+        } else if (action === 'complete') {
+          newStatus = 'completed'
+          await query(
+            `UPDATE custom_orders SET status='completed', completed_at=CURRENT_TIMESTAMP, admin_note=COALESCE(?, admin_note) WHERE id=?`,
+            [body.note ?? null, id]
+          )
+        } else if (action === 'reopen') {
+          newStatus = 'new'
+          await query(
+            `UPDATE custom_orders SET status='new', accepted_at=NULL, completed_at=NULL WHERE id=?`,
+            [id]
+          )
+        } else if (action === 'note') {
+          await query(`UPDATE custom_orders SET admin_note=? WHERE id=?`, [body.note ?? null, id])
+        } else {
+          return err('invalid action', 400)
+        }
+        const [updated] = await query('SELECT * FROM custom_orders WHERE id=?', [id])
+        return ok({ ok: true, order: updated, status: newStatus, emailStatus, emailError })
+      }
+
+      if (route === '/admin/uploads' && method === 'GET') {
+        const rows = await query('SELECT * FROM uploads ORDER BY created_at DESC LIMIT 500')
+        return ok({ uploads: rows })
+      }
+      const mDelUpload = route.match(/^\/admin\/uploads\/([^/]+)$/)
+      if (mDelUpload && method === 'DELETE') {
+        const id = mDelUpload[1]
+        const rows = await query('SELECT * FROM uploads WHERE id=?', [id])
+        if (!rows.length) return err('upload not found', 404)
+        const u = rows[0]
+        try {
+          const uploadDir = process.env.UPLOAD_DIR || 'public/products'
+          const abs = path.isAbsolute(uploadDir) ? uploadDir : path.join(process.cwd(), uploadDir)
+          await fs.unlink(path.join(abs, u.filename))
+        } catch (e) { console.warn('[admin] file delete failed:', e?.message) }
+        await query('DELETE FROM uploads WHERE id=?', [id])
+        return ok({ ok: true })
+      }
+
+      if (route === '/admin/contacts' && method === 'GET') {
+        const rows = await query('SELECT * FROM contacts ORDER BY created_at DESC LIMIT 500')
+        return ok({ contacts: rows })
+      }
+      if (route === '/admin/newsletter' && method === 'GET') {
+        const rows = await query('SELECT email, subscribed_at FROM newsletter ORDER BY subscribed_at DESC LIMIT 1000')
+        return ok({ subscribers: rows })
+      }
+      if (route === '/admin/payments' && method === 'GET') {
+        const rows = await query('SELECT * FROM payments ORDER BY created_at DESC LIMIT 500')
+        return ok({ payments: rows })
+      }
+
+      return err(`Admin route ${route} not found`, 404)
     }
 
     // Health

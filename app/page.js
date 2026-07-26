@@ -62,12 +62,12 @@ const WHYS = [
 ]
 
 const FAQS = [
-  { q: 'How long does a custom order take?', a: 'Depending on complexity, custom orders typically take 2–4 weeks. We will confirm the exact timeline after your enquiry.' },
+  { q: 'How do I place a custom order and what is the payment process?', a: 'Fill the Custom Order form on this page (or reach us on WhatsApp) with your colours, size, occasion and a reference image. After a short discussion about your piece, payment must be made in advance via UPI and/or a secured payment link — details are shared with you on our WhatsApp Business account. Only once payment is confirmed do we reserve materials and begin crafting.' },
+  { q: 'How long does a custom order take?', a: 'Depending on complexity, custom orders typically take 2–4 weeks after payment. We will confirm the exact timeline for your piece before starting.' },
   { q: 'Do you ship internationally?', a: 'Yes, we ship worldwide. International orders take 10–21 business days after dispatch.' },
   { q: 'How should I care for my crochet piece?', a: 'Hand wash in cold water with mild detergent, reshape while damp and dry flat. Avoid direct sunlight.' },
   { q: 'What is your return policy?', a: 'Because every piece is handmade to order, we do not accept returns unless the product is defective. We work with you to make it right.' },
   { q: 'Can I gift-wrap an order?', a: 'Every SutraKriti order is packaged in our signature keepsake box at no extra cost. Personalised notes are complimentary.' },
-  { q: 'How do I place a custom order?', a: 'Fill the Custom Order form on this page or reach us on WhatsApp. Share your colours, size, occasion and a reference image if you have one.' },
 ]
 
 function YarnParticles({ count = 22 }) {

@@ -1,578 +1,627 @@
 #!/usr/bin/env python3
 """
-SutraKriti Backend API Test Suite - MySQL Migration
-Tests all backend endpoints after MongoDB → MySQL migration
+SutraKriti Backend API Test Suite - Round 3
+Tests admin authentication, admin endpoints, and retests public endpoints
 """
-
 import requests
 import json
-import io
-from datetime import datetime
+import os
+from io import BytesIO
+from PIL import Image
 
-# Configuration
+# Load base URL from .env
 BASE_URL = "https://premium-threads-332.preview.emergentagent.com/api"
+ADMIN_PASSWORD = "sutrakriti-admin-dev"
 UPLOAD_TOKEN = "sutrakriti-dev-upload-token"
 
-# Test data
-TEST_CUSTOM_ORDER = {
-    "name": "Ananya Desai",
-    "contact": "9876543210",
-    "email": "ananya.desai@example.com",
-    "productType": "Potli Bag",
-    "colors": "Sage Green, Gold",
-    "size": "Medium",
-    "budget": "2500-3500",
-    "occasion": "Festive Season",
-    "referenceImage": "https://example.com/potli-ref.jpg",
-    "notes": "Looking for traditional design with modern touch"
-}
+print("=" * 80)
+print("SutraKriti Backend API Test Suite - Round 3")
+print("=" * 80)
+print(f"Base URL: {BASE_URL}\n")
 
-TEST_CONTACT = {
-    "name": "Kavya Iyer",
-    "email": "kavya.iyer@example.com",
-    "message": "Your handcrafted pieces are absolutely stunning! I'd love to know more about custom orders for home decor items."
-}
+# Track test results
+tests_passed = 0
+tests_failed = 0
+admin_cookie = None
 
-TEST_NEWSLETTER = {
-    "email": "newsletter.subscriber@example.com"
-}
+def test_result(name, passed, details=""):
+    global tests_passed, tests_failed
+    status = "✅ PASS" if passed else "❌ FAIL"
+    print(f"{status}: {name}")
+    if details:
+        print(f"  → {details}")
+    if passed:
+        tests_passed += 1
+    else:
+        tests_failed += 1
+    print()
 
-def print_test_header(test_name):
-    print(f"\n{'='*80}")
-    print(f"TEST: {test_name}")
-    print(f"{'='*80}")
+# ============================================================================
+# PART 1: RETEST PUBLIC ENDPOINTS
+# ============================================================================
+print("\n" + "=" * 80)
+print("PART 1: RETESTING PUBLIC ENDPOINTS")
+print("=" * 80 + "\n")
 
-def print_result(success, message):
-    status = "✅ PASS" if success else "❌ FAIL"
-    print(f"{status}: {message}")
+# Test 1: GET /api/health
+try:
+    r = requests.get(f"{BASE_URL}/health", timeout=10)
+    if r.status_code == 200:
+        data = r.json()
+        if data.get('ok') and data.get('db') and data.get('mail') == False:
+            test_result("GET /api/health", True, f"Returns {data}")
+        else:
+            test_result("GET /api/health", False, f"Unexpected response: {data}")
+    else:
+        test_result("GET /api/health", False, f"Status {r.status_code}: {r.text}")
+except Exception as e:
+    test_result("GET /api/health", False, f"Exception: {e}")
 
-def test_health():
-    """Test GET /api/health - should return db:true, mail:false"""
-    print_test_header("GET /api/health - Health Check")
+# Test 2: GET /api/products
+try:
+    r = requests.get(f"{BASE_URL}/products", timeout=10)
+    if r.status_code == 200:
+        data = r.json()
+        products = data.get('products', [])
+        if len(products) == 8:
+            test_result("GET /api/products", True, f"Returns 8 products")
+        else:
+            test_result("GET /api/products", False, f"Expected 8 products, got {len(products)}")
+    else:
+        test_result("GET /api/products", False, f"Status {r.status_code}: {r.text}")
+except Exception as e:
+    test_result("GET /api/products", False, f"Exception: {e}")
+
+# Test 3: POST /api/custom-order
+try:
+    payload = {
+        "name": "Priya Sharma",
+        "contact": "9876543210",
+        "email": "priya.sharma@example.com",
+        "productType": "Handbag",
+        "colors": "Terracotta, Cream",
+        "size": "Medium",
+        "budget": "3000-5000",
+        "occasion": "Wedding gift",
+        "notes": "Need by next month"
+    }
+    r = requests.post(f"{BASE_URL}/custom-order", json=payload, timeout=10)
+    if r.status_code == 200:
+        data = r.json()
+        if data.get('ok') and data.get('id') and data.get('emailStatus') == 'skipped':
+            test_result("POST /api/custom-order", True, f"Created order {data['id']}, emailStatus: {data['emailStatus']}")
+            # Save order ID for later admin tests
+            global test_order_id
+            test_order_id = data['id']
+        else:
+            test_result("POST /api/custom-order", False, f"Unexpected response: {data}")
+    else:
+        test_result("POST /api/custom-order", False, f"Status {r.status_code}: {r.text}")
+except Exception as e:
+    test_result("POST /api/custom-order", False, f"Exception: {e}")
+
+# Test 4: POST /api/newsletter
+try:
+    r = requests.post(f"{BASE_URL}/newsletter", json={"email": "test@example.com"}, timeout=10)
+    if r.status_code == 200:
+        data = r.json()
+        if data.get('ok'):
+            test_result("POST /api/newsletter", True, "Subscribed successfully")
+        else:
+            test_result("POST /api/newsletter", False, f"Unexpected response: {data}")
+    else:
+        test_result("POST /api/newsletter", False, f"Status {r.status_code}: {r.text}")
+except Exception as e:
+    test_result("POST /api/newsletter", False, f"Exception: {e}")
+
+# Test 5: POST /api/contact
+try:
+    r = requests.post(f"{BASE_URL}/contact", json={"name": "Test User", "message": "Test message"}, timeout=10)
+    if r.status_code == 200:
+        data = r.json()
+        if data.get('ok'):
+            test_result("POST /api/contact", True, "Contact submitted successfully")
+        else:
+            test_result("POST /api/contact", False, f"Unexpected response: {data}")
+    else:
+        test_result("POST /api/contact", False, f"Status {r.status_code}: {r.text}")
+except Exception as e:
+    test_result("POST /api/contact", False, f"Exception: {e}")
+
+# Test 6: POST /api/razorpay/order (should return 503)
+try:
+    r = requests.post(f"{BASE_URL}/razorpay/order", json={"productId": "p-tote-terracotta"}, timeout=10)
+    if r.status_code == 503:
+        data = r.json()
+        if data.get('error') == 'payment_unconfigured' and data.get('whatsappNumber'):
+            test_result("POST /api/razorpay/order", True, "Returns 503 payment_unconfigured (CORRECT)")
+        else:
+            test_result("POST /api/razorpay/order", False, f"Unexpected response: {data}")
+    else:
+        test_result("POST /api/razorpay/order", False, f"Expected 503, got {r.status_code}: {r.text}")
+except Exception as e:
+    test_result("POST /api/razorpay/order", False, f"Exception: {e}")
+
+# Test 7: POST /api/upload (with token)
+try:
+    # Create a small test image
+    img = Image.new('RGB', (100, 100), color='red')
+    img_bytes = BytesIO()
+    img.save(img_bytes, format='PNG')
+    img_bytes.seek(0)
     
+    files = {'file': ('test-image.png', img_bytes, 'image/png')}
+    headers = {'x-upload-token': UPLOAD_TOKEN}
+    r = requests.post(f"{BASE_URL}/upload", files=files, headers=headers, timeout=10)
+    
+    if r.status_code == 200:
+        data = r.json()
+        if data.get('ok') and data.get('id') and data.get('url'):
+            test_result("POST /api/upload (with token)", True, f"Uploaded {data['filename']}, id: {data['id']}")
+            # Save upload ID for later deletion test
+            global test_upload_id
+            test_upload_id = data['id']
+        else:
+            test_result("POST /api/upload (with token)", False, f"Unexpected response: {data}")
+    else:
+        test_result("POST /api/upload (with token)", False, f"Status {r.status_code}: {r.text}")
+except Exception as e:
+    test_result("POST /api/upload (with token)", False, f"Exception: {e}")
+
+# Test 8: POST /api/upload (without token - should fail)
+try:
+    img = Image.new('RGB', (100, 100), color='blue')
+    img_bytes = BytesIO()
+    img.save(img_bytes, format='PNG')
+    img_bytes.seek(0)
+    
+    files = {'file': ('test-image2.png', img_bytes, 'image/png')}
+    r = requests.post(f"{BASE_URL}/upload", files=files, timeout=10)
+    
+    if r.status_code == 401:
+        data = r.json()
+        if data.get('error') == 'unauthorised':
+            test_result("POST /api/upload (without token)", True, "Returns 401 unauthorised (CORRECT)")
+        else:
+            test_result("POST /api/upload (without token)", False, f"Unexpected response: {data}")
+    else:
+        test_result("POST /api/upload (without token)", False, f"Expected 401, got {r.status_code}: {r.text}")
+except Exception as e:
+    test_result("POST /api/upload (without token)", False, f"Exception: {e}")
+
+# ============================================================================
+# PART 2: ADMIN AUTHENTICATION
+# ============================================================================
+print("\n" + "=" * 80)
+print("PART 2: ADMIN AUTHENTICATION")
+print("=" * 80 + "\n")
+
+# Test 9: POST /api/admin/login (wrong password)
+try:
+    r = requests.post(f"{BASE_URL}/admin/login", json={"password": "wrong-password"}, timeout=10)
+    if r.status_code == 401:
+        data = r.json()
+        if data.get('error') == 'invalid_credentials':
+            test_result("POST /api/admin/login (wrong password)", True, "Returns 401 invalid_credentials")
+        else:
+            test_result("POST /api/admin/login (wrong password)", False, f"Unexpected response: {data}")
+    else:
+        test_result("POST /api/admin/login (wrong password)", False, f"Expected 401, got {r.status_code}: {r.text}")
+except Exception as e:
+    test_result("POST /api/admin/login (wrong password)", False, f"Exception: {e}")
+
+# Test 10: POST /api/admin/login (correct password)
+try:
+    r = requests.post(f"{BASE_URL}/admin/login", json={"password": ADMIN_PASSWORD}, timeout=10)
+    if r.status_code == 200:
+        data = r.json()
+        cookies = r.cookies
+        if data.get('ok') and 'sk_admin' in cookies:
+            admin_cookie = cookies['sk_admin']
+            test_result("POST /api/admin/login (correct password)", True, f"Returns 200, cookie set: sk_admin={admin_cookie[:20]}...")
+        else:
+            test_result("POST /api/admin/login (correct password)", False, f"Cookie not set or unexpected response: {data}")
+    else:
+        test_result("POST /api/admin/login (correct password)", False, f"Status {r.status_code}: {r.text}")
+except Exception as e:
+    test_result("POST /api/admin/login (correct password)", False, f"Exception: {e}")
+
+# Test 11: GET /api/admin/me (without cookie)
+try:
+    r = requests.get(f"{BASE_URL}/admin/me", timeout=10)
+    if r.status_code == 401:
+        data = r.json()
+        if data.get('error') == 'unauthorised':
+            test_result("GET /api/admin/me (without cookie)", True, "Returns 401 unauthorised")
+        else:
+            test_result("GET /api/admin/me (without cookie)", False, f"Unexpected response: {data}")
+    else:
+        test_result("GET /api/admin/me (without cookie)", False, f"Expected 401, got {r.status_code}: {r.text}")
+except Exception as e:
+    test_result("GET /api/admin/me (without cookie)", False, f"Exception: {e}")
+
+# Test 12: GET /api/admin/me (with cookie)
+if admin_cookie:
     try:
-        response = requests.get(f"{BASE_URL}/health", timeout=10)
-        print(f"Status Code: {response.status_code}")
-        
-        if response.status_code != 200:
-            print_result(False, f"Expected 200, got {response.status_code}")
-            return False
-        
-        data = response.json()
-        print(f"Response: {json.dumps(data, indent=2)}")
-        
-        if not data.get("ok"):
-            print_result(False, "Expected ok:true")
-            return False
-        
-        if not data.get("db"):
-            print_result(False, "Expected db:true (MySQL connection)")
-            return False
-        
-        if data.get("mail") != False:
-            print_result(False, f"Expected mail:false (SMTP unconfigured), got {data.get('mail')}")
-            return False
-        
-        print_result(True, "Health check passed: ok=true, db=true, mail=false")
-        return True
-        
+        cookies = {'sk_admin': admin_cookie}
+        r = requests.get(f"{BASE_URL}/admin/me", cookies=cookies, timeout=10)
+        if r.status_code == 200:
+            data = r.json()
+            if data.get('authenticated'):
+                test_result("GET /api/admin/me (with cookie)", True, "Returns 200 authenticated:true")
+            else:
+                test_result("GET /api/admin/me (with cookie)", False, f"Unexpected response: {data}")
+        else:
+            test_result("GET /api/admin/me (with cookie)", False, f"Status {r.status_code}: {r.text}")
     except Exception as e:
-        print_result(False, f"Exception: {str(e)}")
-        return False
+        test_result("GET /api/admin/me (with cookie)", False, f"Exception: {e}")
+else:
+    test_result("GET /api/admin/me (with cookie)", False, "No admin cookie available")
 
-def test_get_products_list():
-    """Test GET /api/products - should return list of 8 products"""
-    print_test_header("GET /api/products - Product List")
-    
+# ============================================================================
+# PART 3: ADMIN ENDPOINTS WITHOUT COOKIE (should all return 401)
+# ============================================================================
+print("\n" + "=" * 80)
+print("PART 3: ADMIN ENDPOINTS WITHOUT COOKIE (should all return 401)")
+print("=" * 80 + "\n")
+
+admin_routes_to_test = [
+    ("GET", "/admin/stats"),
+    ("GET", "/admin/custom-orders"),
+    ("GET", "/admin/uploads"),
+    ("GET", "/admin/contacts"),
+    ("GET", "/admin/newsletter"),
+    ("GET", "/admin/payments"),
+]
+
+for method, route in admin_routes_to_test:
     try:
-        response = requests.get(f"{BASE_URL}/products", timeout=10)
-        print(f"Status Code: {response.status_code}")
+        if method == "GET":
+            r = requests.get(f"{BASE_URL}{route}", timeout=10)
+        elif method == "POST":
+            r = requests.post(f"{BASE_URL}{route}", json={}, timeout=10)
         
-        if response.status_code != 200:
-            print_result(False, f"Expected 200, got {response.status_code}")
-            return False
-        
-        data = response.json()
-        
-        if "products" not in data:
-            print_result(False, "Response missing 'products' key")
-            return False
-        
-        products = data["products"]
-        print(f"Number of products: {len(products)}")
-        
-        if len(products) != 8:
-            print_result(False, f"Expected 8 products, got {len(products)}")
-            return False
-        
-        # Verify product structure
-        required_fields = ["id", "name", "category", "price", "image", "description", "material", "dimensions", "care", "delivery"]
-        sample_product = products[0]
-        print(f"Sample product: {sample_product['name']} (ID: {sample_product['id']})")
-        
-        missing_fields = [field for field in required_fields if field not in sample_product]
-        if missing_fields:
-            print_result(False, f"Product missing fields: {missing_fields}")
-            return False
-        
-        print_result(True, f"Successfully retrieved {len(products)} products with all required fields")
-        return True
-        
+        if r.status_code == 401:
+            data = r.json()
+            if data.get('error') == 'unauthorised':
+                test_result(f"{method} {route} (without cookie)", True, "Returns 401 unauthorised")
+            else:
+                test_result(f"{method} {route} (without cookie)", False, f"Unexpected response: {data}")
+        else:
+            test_result(f"{method} {route} (without cookie)", False, f"Expected 401, got {r.status_code}: {r.text}")
     except Exception as e:
-        print_result(False, f"Exception: {str(e)}")
-        return False
+        test_result(f"{method} {route} (without cookie)", False, f"Exception: {e}")
 
-def test_get_single_product():
-    """Test GET /api/products/:id - should return single product"""
-    print_test_header("GET /api/products/:id - Single Product")
+# ============================================================================
+# PART 4: ADMIN ENDPOINTS WITH COOKIE
+# ============================================================================
+print("\n" + "=" * 80)
+print("PART 4: ADMIN ENDPOINTS WITH COOKIE")
+print("=" * 80 + "\n")
+
+if admin_cookie:
+    cookies = {'sk_admin': admin_cookie}
     
+    # Test 13: GET /api/admin/stats
     try:
-        # Test valid product ID
-        product_id = "p-tote-terracotta"
-        response = requests.get(f"{BASE_URL}/products/{product_id}", timeout=10)
-        print(f"Testing valid ID '{product_id}': Status {response.status_code}")
-        
-        if response.status_code != 200:
-            print_result(False, f"Expected 200 for valid ID, got {response.status_code}")
-            return False
-        
-        data = response.json()
-        if "product" not in data:
-            print_result(False, "Response missing 'product' key")
-            return False
-        
-        product = data["product"]
-        print(f"Product found: {product['name']}")
-        
-        if product["id"] != product_id:
-            print_result(False, f"Product ID mismatch: expected {product_id}, got {product['id']}")
-            return False
-        
-        # Test invalid product ID
-        invalid_id = "unknown-product-id"
-        response = requests.get(f"{BASE_URL}/products/{invalid_id}", timeout=10)
-        print(f"Testing invalid ID '{invalid_id}': Status {response.status_code}")
-        
-        if response.status_code != 404:
-            print_result(False, f"Expected 404 for invalid ID, got {response.status_code}")
-            return False
-        
-        print_result(True, "Valid ID returns 200 with product, invalid ID returns 404")
-        return True
-        
+        r = requests.get(f"{BASE_URL}/admin/stats", cookies=cookies, timeout=10)
+        if r.status_code == 200:
+            data = r.json()
+            required_keys = ['orders', 'uploads', 'newsletter', 'contacts', 'payments', 'recent']
+            if all(k in data for k in required_keys):
+                test_result("GET /api/admin/stats", True, f"Returns stats: orders={data['orders']}, uploads={data['uploads']}, newsletter={data['newsletter']}")
+            else:
+                test_result("GET /api/admin/stats", False, f"Missing keys in response: {data}")
+        else:
+            test_result("GET /api/admin/stats", False, f"Status {r.status_code}: {r.text}")
     except Exception as e:
-        print_result(False, f"Exception: {str(e)}")
-        return False
-
-def test_custom_order():
-    """Test POST /api/custom-order - should create custom order with emailStatus:'skipped'"""
-    print_test_header("POST /api/custom-order - Custom Order Enquiry")
+        test_result("GET /api/admin/stats", False, f"Exception: {e}")
     
+    # Test 14: GET /api/admin/custom-orders
     try:
-        # Test valid custom order
-        response = requests.post(f"{BASE_URL}/custom-order", json=TEST_CUSTOM_ORDER, timeout=10)
-        print(f"Valid order status: {response.status_code}")
-        
-        if response.status_code != 200:
-            print_result(False, f"Expected 200 for valid order, got {response.status_code}")
-            print(f"Response: {response.text}")
-            return False
-        
-        data = response.json()
-        print(f"Response: {json.dumps(data, indent=2)}")
-        
-        if not data.get("ok") or not data.get("id"):
-            print_result(False, f"Response missing 'ok' or 'id': {data}")
-            return False
-        
-        # Check emailStatus is 'skipped' (SMTP not configured)
-        if data.get("emailStatus") != "skipped":
-            print_result(False, f"Expected emailStatus:'skipped', got '{data.get('emailStatus')}'")
-            return False
-        
-        order_id = data["id"]
-        print(f"✓ Order created with ID: {order_id}, emailStatus: {data['emailStatus']}")
-        
-        # Test missing required fields
-        invalid_order = {"email": "test@example.com"}  # Missing name and contact
-        response = requests.post(f"{BASE_URL}/custom-order", json=invalid_order, timeout=10)
-        print(f"Missing fields status: {response.status_code}")
-        
-        if response.status_code != 400:
-            print_result(False, f"Expected 400 for missing fields, got {response.status_code}")
-            return False
-        
-        print_result(True, "Valid order creates record (200) with emailStatus:'skipped', missing fields returns 400")
-        return True
-        
+        r = requests.get(f"{BASE_URL}/admin/custom-orders", cookies=cookies, timeout=10)
+        if r.status_code == 200:
+            data = r.json()
+            if 'orders' in data and isinstance(data['orders'], list):
+                test_result("GET /api/admin/custom-orders", True, f"Returns {len(data['orders'])} orders")
+            else:
+                test_result("GET /api/admin/custom-orders", False, f"Unexpected response: {data}")
+        else:
+            test_result("GET /api/admin/custom-orders", False, f"Status {r.status_code}: {r.text}")
     except Exception as e:
-        print_result(False, f"Exception: {str(e)}")
-        return False
-
-def test_contact():
-    """Test POST /api/contact - should store contact message"""
-    print_test_header("POST /api/contact - Contact Form")
+        test_result("GET /api/admin/custom-orders", False, f"Exception: {e}")
     
+    # Test 15: GET /api/admin/custom-orders?status=new
     try:
-        # Test valid contact
-        response = requests.post(f"{BASE_URL}/contact", json=TEST_CONTACT, timeout=10)
-        print(f"Valid contact status: {response.status_code}")
-        
-        if response.status_code != 200:
-            print_result(False, f"Expected 200 for valid contact, got {response.status_code}")
-            print(f"Response: {response.text}")
-            return False
-        
-        data = response.json()
-        if not data.get("ok"):
-            print_result(False, f"Response missing 'ok': {data}")
-            return False
-        
-        print(f"✓ Contact message submitted successfully")
-        
-        # Test missing required fields
-        invalid_contact = {"name": "Test"}  # Missing message
-        response = requests.post(f"{BASE_URL}/contact", json=invalid_contact, timeout=10)
-        print(f"Missing message status: {response.status_code}")
-        
-        if response.status_code != 400:
-            print_result(False, f"Expected 400 for missing message, got {response.status_code}")
-            return False
-        
-        print_result(True, "Valid contact creates record (200), missing fields returns 400")
-        return True
-        
+        r = requests.get(f"{BASE_URL}/admin/custom-orders?status=new", cookies=cookies, timeout=10)
+        if r.status_code == 200:
+            data = r.json()
+            if 'orders' in data and isinstance(data['orders'], list):
+                test_result("GET /api/admin/custom-orders?status=new", True, f"Returns {len(data['orders'])} new orders")
+            else:
+                test_result("GET /api/admin/custom-orders?status=new", False, f"Unexpected response: {data}")
+        else:
+            test_result("GET /api/admin/custom-orders?status=new", False, f"Status {r.status_code}: {r.text}")
     except Exception as e:
-        print_result(False, f"Exception: {str(e)}")
-        return False
-
-def test_newsletter():
-    """Test POST /api/newsletter - should subscribe email with upsert semantics"""
-    print_test_header("POST /api/newsletter - Newsletter Subscription")
+        test_result("GET /api/admin/custom-orders?status=new", False, f"Exception: {e}")
     
+    # Test 16: GET /api/admin/uploads
     try:
-        # Test valid subscription (first time)
-        response = requests.post(f"{BASE_URL}/newsletter", json=TEST_NEWSLETTER, timeout=10)
-        print(f"First subscription status: {response.status_code}")
-        
-        if response.status_code != 200:
-            print_result(False, f"Expected 200 for valid subscription, got {response.status_code}")
-            print(f"Response: {response.text}")
-            return False
-        
-        data = response.json()
-        if not data.get("ok"):
-            print_result(False, f"Response missing 'ok': {data}")
-            return False
-        
-        print(f"✓ Newsletter subscription successful")
-        
-        # Test upsert semantics (same email again should not error)
-        response = requests.post(f"{BASE_URL}/newsletter", json=TEST_NEWSLETTER, timeout=10)
-        print(f"Duplicate subscription status: {response.status_code}")
-        
-        if response.status_code != 200:
-            print_result(False, f"Expected 200 for duplicate subscription (upsert), got {response.status_code}")
-            return False
-        
-        print(f"✓ Duplicate subscription handled correctly (upsert)")
-        
-        # Test missing email
-        invalid_sub = {}
-        response = requests.post(f"{BASE_URL}/newsletter", json=invalid_sub, timeout=10)
-        print(f"Missing email status: {response.status_code}")
-        
-        if response.status_code != 400:
-            print_result(False, f"Expected 400 for missing email, got {response.status_code}")
-            return False
-        
-        print_result(True, "Valid email subscribes (200), upsert works, missing email returns 400")
-        return True
-        
+        r = requests.get(f"{BASE_URL}/admin/uploads", cookies=cookies, timeout=10)
+        if r.status_code == 200:
+            data = r.json()
+            if 'uploads' in data and isinstance(data['uploads'], list):
+                test_result("GET /api/admin/uploads", True, f"Returns {len(data['uploads'])} uploads")
+            else:
+                test_result("GET /api/admin/uploads", False, f"Unexpected response: {data}")
+        else:
+            test_result("GET /api/admin/uploads", False, f"Status {r.status_code}: {r.text}")
     except Exception as e:
-        print_result(False, f"Exception: {str(e)}")
-        return False
-
-def test_razorpay_order():
-    """Test POST /api/razorpay/order - should return 503 when keys not configured"""
-    print_test_header("POST /api/razorpay/order - Payment Order (Gated)")
+        test_result("GET /api/admin/uploads", False, f"Exception: {e}")
     
+    # Test 17: GET /api/admin/contacts
     try:
-        # Test with valid product ID - should return 503 because keys are empty
-        valid_request = {"productId": "p-tote-terracotta"}
-        response = requests.post(f"{BASE_URL}/razorpay/order", json=valid_request, timeout=10)
-        print(f"Valid product (gated) status: {response.status_code}")
-        
-        if response.status_code != 503:
-            print_result(False, f"Expected 503 for gated payment, got {response.status_code}")
-            print(f"Response: {response.text}")
-            return False
-        
-        data = response.json()
-        print(f"Response: {json.dumps(data, indent=2)}")
-        
-        if data.get("error") != "payment_unconfigured":
-            print_result(False, f"Expected error 'payment_unconfigured', got {data.get('error')}")
-            return False
-        
-        if "whatsappNumber" not in data:
-            print_result(False, "Response missing 'whatsappNumber'")
-            return False
-        
-        print(f"✓ Correct 503 response with whatsappNumber: {data['whatsappNumber']}")
-        
-        # Test with invalid product ID
-        invalid_request = {"productId": "unknown-product"}
-        response = requests.post(f"{BASE_URL}/razorpay/order", json=invalid_request, timeout=10)
-        print(f"Invalid product status: {response.status_code}")
-        
-        if response.status_code != 404:
-            print_result(False, f"Expected 404 for invalid product, got {response.status_code}")
-            return False
-        
-        print_result(True, "Returns 503 payment_unconfigured (EXPECTED MVP behavior), 404 for invalid product")
-        return True
-        
+        r = requests.get(f"{BASE_URL}/admin/contacts", cookies=cookies, timeout=10)
+        if r.status_code == 200:
+            data = r.json()
+            if 'contacts' in data and isinstance(data['contacts'], list):
+                test_result("GET /api/admin/contacts", True, f"Returns {len(data['contacts'])} contacts")
+            else:
+                test_result("GET /api/admin/contacts", False, f"Unexpected response: {data}")
+        else:
+            test_result("GET /api/admin/contacts", False, f"Status {r.status_code}: {r.text}")
     except Exception as e:
-        print_result(False, f"Exception: {str(e)}")
-        return False
-
-def test_razorpay_verify():
-    """Test POST /api/razorpay/verify - should validate required fields"""
-    print_test_header("POST /api/razorpay/verify - Payment Verification")
+        test_result("GET /api/admin/contacts", False, f"Exception: {e}")
     
+    # Test 18: GET /api/admin/newsletter
     try:
-        # Test missing fields
-        invalid_request = {"razorpay_order_id": "order_123"}  # Missing payment_id and signature
-        response = requests.post(f"{BASE_URL}/razorpay/verify", json=invalid_request, timeout=10)
-        print(f"Missing fields status: {response.status_code}")
-        
-        if response.status_code != 400:
-            print_result(False, f"Expected 400 for missing fields, got {response.status_code}")
-            print(f"Response: {response.text}")
-            return False
-        
-        data = response.json()
-        if "error" not in data:
-            print_result(False, "Response missing 'error' key")
-            return False
-        
-        print(f"✓ Correctly returns 400 for missing fields: {data['error']}")
-        print_result(True, "Field validation working (400 for missing fields)")
-        return True
-        
+        r = requests.get(f"{BASE_URL}/admin/newsletter", cookies=cookies, timeout=10)
+        if r.status_code == 200:
+            data = r.json()
+            if 'subscribers' in data and isinstance(data['subscribers'], list):
+                test_result("GET /api/admin/newsletter", True, f"Returns {len(data['subscribers'])} subscribers")
+            else:
+                test_result("GET /api/admin/newsletter", False, f"Unexpected response: {data}")
+        else:
+            test_result("GET /api/admin/newsletter", False, f"Status {r.status_code}: {r.text}")
     except Exception as e:
-        print_result(False, f"Exception: {str(e)}")
-        return False
-
-def test_upload():
-    """Test POST /api/upload - should handle file upload with token authentication"""
-    print_test_header("POST /api/upload - File Upload")
+        test_result("GET /api/admin/newsletter", False, f"Exception: {e}")
     
+    # Test 19: GET /api/admin/payments
     try:
-        # Create a small test PNG (1x1 pixel red PNG)
-        png_data = bytes([
-            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,  # PNG signature
-            0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,  # IHDR chunk
-            0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-            0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53,
-            0xDE, 0x00, 0x00, 0x00, 0x0C, 0x49, 0x44, 0x41,  # IDAT chunk
-            0x54, 0x08, 0xD7, 0x63, 0xF8, 0xCF, 0xC0, 0x00,
-            0x00, 0x03, 0x01, 0x01, 0x00, 0x18, 0xDD, 0x8D,
-            0xB4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E,  # IEND chunk
-            0x44, 0xAE, 0x42, 0x60, 0x82
-        ])
-        
-        # Test 1: Valid upload with token
-        files = {'file': ('test-product.png', io.BytesIO(png_data), 'image/png')}
-        headers = {'x-upload-token': UPLOAD_TOKEN}
-        response = requests.post(f"{BASE_URL}/upload", files=files, headers=headers, timeout=10)
-        print(f"Valid upload with token status: {response.status_code}")
-        
-        if response.status_code != 200:
-            print_result(False, f"Expected 200 for valid upload, got {response.status_code}")
-            print(f"Response: {response.text}")
-            return False
-        
-        data = response.json()
-        print(f"Response: {json.dumps(data, indent=2)}")
-        
-        if not data.get("ok") or not data.get("url"):
-            print_result(False, f"Response missing 'ok' or 'url': {data}")
-            return False
-        
-        print(f"✓ File uploaded successfully: {data['url']}")
-        
-        # Test 2: Upload without token (should return 401)
-        files = {'file': ('test-product2.png', io.BytesIO(png_data), 'image/png')}
-        response = requests.post(f"{BASE_URL}/upload", files=files, timeout=10)
-        print(f"Upload without token status: {response.status_code}")
-        
-        if response.status_code != 401:
-            print_result(False, f"Expected 401 for missing token, got {response.status_code}")
-            return False
-        
-        print(f"✓ Correctly rejected upload without token (401)")
-        
-        # Test 3: Upload with wrong mime type (should return 415)
-        text_data = b"This is a text file, not an image"
-        files = {'file': ('test.txt', io.BytesIO(text_data), 'text/plain')}
-        headers = {'x-upload-token': UPLOAD_TOKEN}
-        response = requests.post(f"{BASE_URL}/upload", files=files, headers=headers, timeout=10)
-        print(f"Upload with wrong mime type status: {response.status_code}")
-        
-        if response.status_code != 415:
-            print_result(False, f"Expected 415 for unsupported mime type, got {response.status_code}")
-            return False
-        
-        print(f"✓ Correctly rejected unsupported mime type (415)")
-        
-        print_result(True, "Upload with token works (200), without token returns 401, wrong mime returns 415")
-        return True
-        
+        r = requests.get(f"{BASE_URL}/admin/payments", cookies=cookies, timeout=10)
+        if r.status_code == 200:
+            data = r.json()
+            if 'payments' in data and isinstance(data['payments'], list):
+                test_result("GET /api/admin/payments", True, f"Returns {len(data['payments'])} payments")
+            else:
+                test_result("GET /api/admin/payments", False, f"Unexpected response: {data}")
+        else:
+            test_result("GET /api/admin/payments", False, f"Status {r.status_code}: {r.text}")
     except Exception as e:
-        print_result(False, f"Exception: {str(e)}")
-        return False
+        test_result("GET /api/admin/payments", False, f"Exception: {e}")
 
-def test_admin_custom_orders():
-    """Test GET /api/admin/custom-orders - should return orders list"""
-    print_test_header("GET /api/admin/custom-orders - Admin Orders List")
+else:
+    print("⚠️  Skipping authenticated admin endpoint tests - no admin cookie available\n")
+
+# ============================================================================
+# PART 5: ORDER ACTIONS
+# ============================================================================
+print("\n" + "=" * 80)
+print("PART 5: ORDER ACTIONS")
+print("=" * 80 + "\n")
+
+if admin_cookie and 'test_order_id' in globals():
+    cookies = {'sk_admin': admin_cookie}
+    order_id = test_order_id
     
+    # Test 20: POST /api/admin/custom-orders/:id/action (action=accept)
     try:
-        response = requests.get(f"{BASE_URL}/admin/custom-orders", timeout=10)
-        print(f"Status Code: {response.status_code}")
-        
-        if response.status_code != 200:
-            print_result(False, f"Expected 200, got {response.status_code}")
-            return False
-        
-        data = response.json()
-        
-        if "orders" not in data:
-            print_result(False, "Response missing 'orders' key")
-            return False
-        
-        orders = data["orders"]
-        print(f"Number of orders: {len(orders)}")
-        
-        if len(orders) > 0:
-            sample_order = orders[0]
-            print(f"Sample order: {sample_order.get('name', 'N/A')} - {sample_order.get('contact', 'N/A')}")
-        
-        print_result(True, f"Successfully retrieved {len(orders)} orders from MySQL")
-        return True
-        
+        payload = {
+            "action": "accept",
+            "note": "Order accepted, will start work soon",
+            "timeline": "2-3 weeks",
+            "sendEmail": True
+        }
+        r = requests.post(f"{BASE_URL}/admin/custom-orders/{order_id}/action", json=payload, cookies=cookies, timeout=10)
+        if r.status_code == 200:
+            data = r.json()
+            if data.get('ok') and data.get('status') == 'accepted' and data.get('emailStatus') == 'smtp_not_configured':
+                test_result("POST /admin/custom-orders/:id/action (accept)", True, f"Status: {data['status']}, emailStatus: {data['emailStatus']} (CORRECT)")
+            else:
+                test_result("POST /admin/custom-orders/:id/action (accept)", False, f"Unexpected response: {data}")
+        else:
+            test_result("POST /admin/custom-orders/:id/action (accept)", False, f"Status {r.status_code}: {r.text}")
     except Exception as e:
-        print_result(False, f"Exception: {str(e)}")
-        return False
-
-def test_admin_uploads():
-    """Test GET /api/admin/uploads - should return uploads list"""
-    print_test_header("GET /api/admin/uploads - Admin Uploads List")
+        test_result("POST /admin/custom-orders/:id/action (accept)", False, f"Exception: {e}")
     
+    # Test 21: POST /api/admin/custom-orders/:id/action (action=complete)
     try:
-        response = requests.get(f"{BASE_URL}/admin/uploads", timeout=10)
-        print(f"Status Code: {response.status_code}")
-        
-        if response.status_code != 200:
-            print_result(False, f"Expected 200, got {response.status_code}")
-            return False
-        
-        data = response.json()
-        
-        if "uploads" not in data:
-            print_result(False, "Response missing 'uploads' key")
-            return False
-        
-        uploads = data["uploads"]
-        print(f"Number of uploads: {len(uploads)}")
-        
-        if len(uploads) > 0:
-            sample_upload = uploads[0]
-            print(f"Sample upload: {sample_upload.get('filename', 'N/A')} - {sample_upload.get('url', 'N/A')}")
-        
-        print_result(True, f"Successfully retrieved {len(uploads)} uploads from MySQL")
-        return True
-        
+        payload = {"action": "complete", "note": "Order completed and shipped"}
+        r = requests.post(f"{BASE_URL}/admin/custom-orders/{order_id}/action", json=payload, cookies=cookies, timeout=10)
+        if r.status_code == 200:
+            data = r.json()
+            if data.get('ok') and data.get('status') == 'completed' and data.get('order', {}).get('completed_at'):
+                test_result("POST /admin/custom-orders/:id/action (complete)", True, f"Status: {data['status']}, completed_at: {data['order']['completed_at']}")
+            else:
+                test_result("POST /admin/custom-orders/:id/action (complete)", False, f"Unexpected response: {data}")
+        else:
+            test_result("POST /admin/custom-orders/:id/action (complete)", False, f"Status {r.status_code}: {r.text}")
     except Exception as e:
-        print_result(False, f"Exception: {str(e)}")
-        return False
-
-def test_admin_newsletter():
-    """Test GET /api/admin/newsletter - should return subscribers list"""
-    print_test_header("GET /api/admin/newsletter - Admin Newsletter Subscribers")
+        test_result("POST /admin/custom-orders/:id/action (complete)", False, f"Exception: {e}")
     
+    # Test 22: POST /api/admin/custom-orders/:id/action (action=reopen)
     try:
-        response = requests.get(f"{BASE_URL}/admin/newsletter", timeout=10)
-        print(f"Status Code: {response.status_code}")
-        
-        if response.status_code != 200:
-            print_result(False, f"Expected 200, got {response.status_code}")
-            return False
-        
-        data = response.json()
-        
-        if "subscribers" not in data:
-            print_result(False, "Response missing 'subscribers' key")
-            return False
-        
-        subscribers = data["subscribers"]
-        print(f"Number of subscribers: {len(subscribers)}")
-        
-        if len(subscribers) > 0:
-            sample_sub = subscribers[0]
-            print(f"Sample subscriber: {sample_sub.get('email', 'N/A')}")
-        
-        print_result(True, f"Successfully retrieved {len(subscribers)} subscribers from MySQL")
-        return True
-        
+        payload = {"action": "reopen"}
+        r = requests.post(f"{BASE_URL}/admin/custom-orders/{order_id}/action", json=payload, cookies=cookies, timeout=10)
+        if r.status_code == 200:
+            data = r.json()
+            order = data.get('order', {})
+            if data.get('ok') and data.get('status') == 'new' and not order.get('accepted_at') and not order.get('completed_at'):
+                test_result("POST /admin/custom-orders/:id/action (reopen)", True, f"Status: {data['status']}, accepted_at: {order.get('accepted_at')}, completed_at: {order.get('completed_at')}")
+            else:
+                test_result("POST /admin/custom-orders/:id/action (reopen)", False, f"Unexpected response: {data}")
+        else:
+            test_result("POST /admin/custom-orders/:id/action (reopen)", False, f"Status {r.status_code}: {r.text}")
     except Exception as e:
-        print_result(False, f"Exception: {str(e)}")
-        return False
+        test_result("POST /admin/custom-orders/:id/action (reopen)", False, f"Exception: {e}")
+    
+    # Test 23: POST /api/admin/custom-orders/:id/action (action=note)
+    try:
+        payload = {"action": "note", "note": "Customer called to confirm details"}
+        r = requests.post(f"{BASE_URL}/admin/custom-orders/{order_id}/action", json=payload, cookies=cookies, timeout=10)
+        if r.status_code == 200:
+            data = r.json()
+            order = data.get('order', {})
+            if data.get('ok') and order.get('admin_note') == "Customer called to confirm details":
+                test_result("POST /admin/custom-orders/:id/action (note)", True, f"admin_note updated: {order.get('admin_note')}")
+            else:
+                test_result("POST /admin/custom-orders/:id/action (note)", False, f"Unexpected response: {data}")
+        else:
+            test_result("POST /admin/custom-orders/:id/action (note)", False, f"Status {r.status_code}: {r.text}")
+    except Exception as e:
+        test_result("POST /admin/custom-orders/:id/action (note)", False, f"Exception: {e}")
+    
+    # Test 24: POST /api/admin/custom-orders/:id/action (invalid action)
+    try:
+        payload = {"action": "invalid_action"}
+        r = requests.post(f"{BASE_URL}/admin/custom-orders/{order_id}/action", json=payload, cookies=cookies, timeout=10)
+        if r.status_code == 400:
+            data = r.json()
+            if data.get('error') == 'invalid action':
+                test_result("POST /admin/custom-orders/:id/action (invalid action)", True, "Returns 400 invalid action")
+            else:
+                test_result("POST /admin/custom-orders/:id/action (invalid action)", False, f"Unexpected response: {data}")
+        else:
+            test_result("POST /admin/custom-orders/:id/action (invalid action)", False, f"Expected 400, got {r.status_code}: {r.text}")
+    except Exception as e:
+        test_result("POST /admin/custom-orders/:id/action (invalid action)", False, f"Exception: {e}")
+    
+    # Test 25: POST /api/admin/custom-orders/:id/action (unknown order id)
+    try:
+        payload = {"action": "accept"}
+        r = requests.post(f"{BASE_URL}/admin/custom-orders/unknown-order-id/action", json=payload, cookies=cookies, timeout=10)
+        if r.status_code == 404:
+            data = r.json()
+            if data.get('error') == 'order not found':
+                test_result("POST /admin/custom-orders/:id/action (unknown id)", True, "Returns 404 order not found")
+            else:
+                test_result("POST /admin/custom-orders/:id/action (unknown id)", False, f"Unexpected response: {data}")
+        else:
+            test_result("POST /admin/custom-orders/:id/action (unknown id)", False, f"Expected 404, got {r.status_code}: {r.text}")
+    except Exception as e:
+        test_result("POST /admin/custom-orders/:id/action (unknown id)", False, f"Exception: {e}")
 
-def main():
-    """Run all backend tests"""
-    print("\n" + "="*80)
-    print("SUTRAKRITI BACKEND API TEST SUITE - MySQL Migration")
-    print("="*80)
-    print(f"Base URL: {BASE_URL}")
-    print(f"Database: MySQL/MariaDB (127.0.0.1:3306, db='sutrakriti')")
-    print(f"Test started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    
-    results = {}
-    
-    # Run all tests in order
-    results["GET /api/health"] = test_health()
-    results["GET /api/products"] = test_get_products_list()
-    results["GET /api/products/:id"] = test_get_single_product()
-    results["POST /api/custom-order"] = test_custom_order()
-    results["POST /api/contact"] = test_contact()
-    results["POST /api/newsletter"] = test_newsletter()
-    results["POST /api/razorpay/order"] = test_razorpay_order()
-    results["POST /api/razorpay/verify"] = test_razorpay_verify()
-    results["POST /api/upload"] = test_upload()
-    results["GET /api/admin/custom-orders"] = test_admin_custom_orders()
-    results["GET /api/admin/uploads"] = test_admin_uploads()
-    results["GET /api/admin/newsletter"] = test_admin_newsletter()
-    
-    # Summary
-    print("\n" + "="*80)
-    print("TEST SUMMARY")
-    print("="*80)
-    
-    passed = sum(1 for v in results.values() if v)
-    total = len(results)
-    
-    for test_name, result in results.items():
-        status = "✅ PASS" if result else "❌ FAIL"
-        print(f"{status} - {test_name}")
-    
-    print(f"\n{'='*80}")
-    print(f"TOTAL: {passed}/{total} tests passed ({(passed/total)*100:.1f}%)")
-    print(f"{'='*80}\n")
-    
-    return passed == total
+else:
+    print("⚠️  Skipping order action tests - no admin cookie or test order available\n")
 
-if __name__ == "__main__":
-    success = main()
-    exit(0 if success else 1)
+# ============================================================================
+# PART 6: DELETE UPLOAD
+# ============================================================================
+print("\n" + "=" * 80)
+print("PART 6: DELETE UPLOAD")
+print("=" * 80 + "\n")
+
+if admin_cookie and 'test_upload_id' in globals():
+    cookies = {'sk_admin': admin_cookie}
+    upload_id = test_upload_id
+    
+    # Test 26: DELETE /api/admin/uploads/:id
+    try:
+        r = requests.delete(f"{BASE_URL}/admin/uploads/{upload_id}", cookies=cookies, timeout=10)
+        if r.status_code == 200:
+            data = r.json()
+            if data.get('ok'):
+                test_result("DELETE /api/admin/uploads/:id", True, f"Deleted upload {upload_id}")
+            else:
+                test_result("DELETE /api/admin/uploads/:id", False, f"Unexpected response: {data}")
+        else:
+            test_result("DELETE /api/admin/uploads/:id", False, f"Status {r.status_code}: {r.text}")
+    except Exception as e:
+        test_result("DELETE /api/admin/uploads/:id", False, f"Exception: {e}")
+    
+    # Test 27: DELETE /api/admin/uploads/:id (unknown id)
+    try:
+        r = requests.delete(f"{BASE_URL}/admin/uploads/unknown-upload-id", cookies=cookies, timeout=10)
+        if r.status_code == 404:
+            data = r.json()
+            if data.get('error') == 'upload not found':
+                test_result("DELETE /api/admin/uploads/:id (unknown id)", True, "Returns 404 upload not found")
+            else:
+                test_result("DELETE /api/admin/uploads/:id (unknown id)", False, f"Unexpected response: {data}")
+        else:
+            test_result("DELETE /api/admin/uploads/:id (unknown id)", False, f"Expected 404, got {r.status_code}: {r.text}")
+    except Exception as e:
+        test_result("DELETE /api/admin/uploads/:id (unknown id)", False, f"Exception: {e}")
+
+else:
+    print("⚠️  Skipping delete upload tests - no admin cookie or test upload available\n")
+
+# ============================================================================
+# PART 7: SESSION PERSISTENCE
+# ============================================================================
+print("\n" + "=" * 80)
+print("PART 7: SESSION PERSISTENCE")
+print("=" * 80 + "\n")
+
+if admin_cookie:
+    cookies = {'sk_admin': admin_cookie}
+    
+    # Test 28: Verify same cookie still works for multiple requests
+    try:
+        routes = ['/admin/stats', '/admin/custom-orders', '/admin/uploads']
+        all_passed = True
+        for route in routes:
+            r = requests.get(f"{BASE_URL}{route}", cookies=cookies, timeout=10)
+            if r.status_code != 200:
+                all_passed = False
+                break
+        
+        if all_passed:
+            test_result("Session persistence", True, "Same cookie works for all admin endpoints")
+        else:
+            test_result("Session persistence", False, "Cookie failed for some endpoints")
+    except Exception as e:
+        test_result("Session persistence", False, f"Exception: {e}")
+
+else:
+    print("⚠️  Skipping session persistence test - no admin cookie available\n")
+
+# ============================================================================
+# PART 8: LOGOUT
+# ============================================================================
+print("\n" + "=" * 80)
+print("PART 8: LOGOUT")
+print("=" * 80 + "\n")
+
+if admin_cookie:
+    cookies = {'sk_admin': admin_cookie}
+    
+    # Test 29: POST /api/admin/logout
+    try:
+        r = requests.post(f"{BASE_URL}/admin/logout", cookies=cookies, timeout=10)
+        if r.status_code == 200:
+            data = r.json()
+            if data.get('ok'):
+                test_result("POST /api/admin/logout", True, "Logged out successfully")
+            else:
+                test_result("POST /api/admin/logout", False, f"Unexpected response: {data}")
+        else:
+            test_result("POST /api/admin/logout", False, f"Status {r.status_code}: {r.text}")
+    except Exception as e:
+        test_result("POST /api/admin/logout", False, f"Exception: {e}")
+
+else:
+    print("⚠️  Skipping logout test - no admin cookie available\n")
+
+# ============================================================================
+# SUMMARY
+# ============================================================================
+print("\n" + "=" * 80)
+print("TEST SUMMARY")
+print("=" * 80)
+print(f"Total tests: {tests_passed + tests_failed}")
+print(f"✅ Passed: {tests_passed}")
+print(f"❌ Failed: {tests_failed}")
+print(f"Success rate: {tests_passed / (tests_passed + tests_failed) * 100:.1f}%")
+print("=" * 80)

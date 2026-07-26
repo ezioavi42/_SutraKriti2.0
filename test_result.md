@@ -273,12 +273,72 @@ backend:
         agent: "testing"
         comment: "✅ TESTED (MySQL): Valid PNG upload with correct token returns 200 { ok:true, id:<uuid>, filename, url, size, mime }. Without token returns 401 { error:'unauthorised' }. Wrong mime type (text/plain) returns 415 { error:'unsupported mime type...' }. File saved to disk and record persisted in MySQL uploads table."
 
+  - task: "POST /api/admin/login"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Admin login endpoint. Validates password against ADMIN_PASSWORD env var. Returns 200 { ok:true } + Set-Cookie: sk_admin=<HMAC-signed token>; HttpOnly; SameSite=Lax; Max-Age=604800 (7 days). Wrong password returns 401 { error:'invalid_credentials' }."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED (Round 3): Wrong password returns 401 { error:'invalid_credentials' }. Correct password (sutrakriti-admin-dev) returns 200 { ok:true } with sk_admin cookie set. Cookie authentication working correctly."
+
+  - task: "POST /api/admin/logout"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Admin logout endpoint. Returns 200 { ok:true } + Set-Cookie clearing sk_admin (Max-Age=0)."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED (Round 3): Returns 200 { ok:true } and clears sk_admin cookie. Logout working correctly."
+
+  - task: "GET /api/admin/me"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Admin session check endpoint. Returns 200 { authenticated:true } WITH valid sk_admin cookie, 401 { error:'unauthorised' } WITHOUT cookie."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED (Round 3): Without cookie returns 401 { error:'unauthorised' }. With valid cookie returns 200 { authenticated:true }. Session validation working correctly."
+
+  - task: "GET /api/admin/stats"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Admin dashboard stats endpoint. Requires sk_admin cookie. Returns 200 with { orders:{total,pending,accepted,completed}, uploads, newsletter, contacts, payments:{n,paid}, recent }."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED (Round 3): Without cookie returns 401 { error:'unauthorised' }. With cookie returns 200 with all required keys (orders, uploads, newsletter, contacts, payments, recent). Cookie enforcement and data aggregation working correctly."
+
   - task: "GET /api/admin/custom-orders"
     implemented: true
     working: true
     file: "app/api/[[...path]]/route.js"
     stuck_count: 0
-    priority: "low"
+    priority: "high"
     needs_retesting: false
     status_history:
       - working: "NA"
@@ -290,13 +350,19 @@ backend:
       - working: true
         agent: "testing"
         comment: "✅ RE-TESTED (MySQL): Returns 200 { orders:[...] } with custom orders from MySQL custom_orders table, sorted by created_at DESC, limit 200. Successfully retrieved 2 orders."
+      - working: "NA"
+        agent: "main"
+        comment: "Added sk_admin cookie authentication. Now requires valid admin session. Supports ?status=new|accepted|completed|all query param for filtering."
+      - working: true
+        agent: "testing"
+        comment: "✅ RE-TESTED (Round 3 - Auth): Without cookie returns 401 { error:'unauthorised' }. With cookie returns 200 { orders:[...] } with 3 orders. Status filtering tested with ?status=new (returns 2 orders). Cookie enforcement and filtering working correctly."
 
   - task: "GET /api/admin/uploads"
     implemented: true
     working: true
     file: "app/api/[[...path]]/route.js"
     stuck_count: 0
-    priority: "low"
+    priority: "high"
     needs_retesting: false
     status_history:
       - working: "NA"
@@ -305,13 +371,49 @@ backend:
       - working: true
         agent: "testing"
         comment: "✅ TESTED (MySQL): Returns 200 { uploads:[...] } with uploads from MySQL uploads table, sorted by created_at DESC, limit 200. Successfully retrieved 2 uploads."
+      - working: "NA"
+        agent: "main"
+        comment: "Added sk_admin cookie authentication. Now requires valid admin session."
+      - working: true
+        agent: "testing"
+        comment: "✅ RE-TESTED (Round 3 - Auth): Without cookie returns 401 { error:'unauthorised' }. With cookie returns 200 { uploads:[...] } with 1 upload. Cookie enforcement working correctly."
+
+  - task: "DELETE /api/admin/uploads/:id"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Admin endpoint to delete uploaded files. Requires sk_admin cookie. Deletes file from disk (public/products/) and removes record from MySQL uploads table. Returns 200 { ok:true } on success, 404 { error:'upload not found' } for unknown id."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED (Round 3): Valid upload id returns 200 { ok:true } and file is deleted from disk and database. Unknown id returns 404 { error:'upload not found' }. Cookie enforcement working (401 without cookie). File deletion working correctly."
+
+  - task: "GET /api/admin/contacts"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Admin endpoint to list contact form submissions. Requires sk_admin cookie. Returns most recent 500 contacts from MySQL contacts table."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED (Round 3): Without cookie returns 401 { error:'unauthorised' }. With cookie returns 200 { contacts:[...] } with 2 contacts. Cookie enforcement working correctly."
 
   - task: "GET /api/admin/newsletter"
     implemented: true
     working: true
     file: "app/api/[[...path]]/route.js"
     stuck_count: 0
-    priority: "low"
+    priority: "high"
     needs_retesting: false
     status_history:
       - working: "NA"
@@ -320,6 +422,42 @@ backend:
       - working: true
         agent: "testing"
         comment: "✅ TESTED (MySQL): Returns 200 { subscribers:[...] } with subscribers from MySQL newsletter table, sorted by subscribed_at DESC, limit 500. Successfully retrieved 2 subscribers."
+      - working: "NA"
+        agent: "main"
+        comment: "Added sk_admin cookie authentication. Now requires valid admin session."
+      - working: true
+        agent: "testing"
+        comment: "✅ RE-TESTED (Round 3 - Auth): Without cookie returns 401 { error:'unauthorised' }. With cookie returns 200 { subscribers:[...] } with 1 subscriber. Cookie enforcement working correctly."
+
+  - task: "GET /api/admin/payments"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Admin endpoint to list Razorpay payment records. Requires sk_admin cookie. Returns most recent 500 payments from MySQL payments table."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED (Round 3): Without cookie returns 401 { error:'unauthorised' }. With cookie returns 200 { payments:[...] } with 0 payments (no payments created yet). Cookie enforcement working correctly."
+
+  - task: "POST /api/admin/custom-orders/:id/action"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Admin endpoint to perform actions on custom orders. Requires sk_admin cookie. Body: { action, note?, timeline?, sendEmail? } where action ∈ { 'accept', 'complete', 'reopen', 'note' }. Returns 200 { ok:true, order, status, emailStatus } on success, 400 for invalid action, 404 for unknown order id."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED (Round 3): All actions tested successfully. action='accept' → status='accepted', emailStatus='smtp_not_configured' (CORRECT - SMTP intentionally unconfigured). action='complete' → status='completed', completed_at populated. action='reopen' → status='new', accepted_at & completed_at nulled. action='note' → admin_note updated only. Invalid action returns 400 { error:'invalid action' }. Unknown order id returns 404 { error:'order not found' }. Cookie enforcement working (401 without cookie). All order action flows working correctly."
 
 frontend:
   - task: "Luxury landing page (hero, story, collections, catalogue, why, personalisation, process, reviews, gallery, faq, newsletter, footer)"
@@ -337,7 +475,7 @@ frontend:
 metadata:
   created_by: "main_agent"
   version: "1.0"
-  test_sequence: 2
+  test_sequence: 3
   run_ui: false
 
 test_plan:
@@ -349,38 +487,62 @@ test_plan:
 agent_communication:
   - agent: "main"
     message: |
-      MAJOR REFACTOR (round 2). Backend has been migrated MongoDB -> MySQL and gained new endpoints.
-      Please test the following against the SutraKriti API (base = NEXT_PUBLIC_BASE_URL + /api).
+      ROUND 3 — Admin dashboard + authenticated /admin/* routes.
 
-      Database: MySQL/MariaDB on 127.0.0.1:3306, DB='sutrakriti', user='sutrakriti'.
-      Schema is auto-created on first request (see lib/db.js). Tables:
-        custom_orders, contacts, newsletter, payments, uploads.
+      NEW/CHANGED endpoints to test (base = NEXT_PUBLIC_BASE_URL + /api):
 
-      Endpoints:
-        - GET  /api/health → 200 { ok:true, db:true, mail:false (SMTP not yet configured) }
-        - GET  /api/products → 200 { products:[8 items] }
-        - GET  /api/products/p-tote-terracotta → 200 { product:{...} }; unknown → 404
-        - POST /api/custom-order with valid body → 200 { ok:true, id:uuid, emailStatus:'skipped' }
-              (skipped because SMTP not configured — this is the correct current behavior).
-              Missing name/contact → 400. Verify row persists via /api/admin/custom-orders.
-        - POST /api/contact { name, message } → 200 { ok:true }; missing → 400
-        - POST /api/newsletter { email } → 200 { ok:true }; missing → 400; upsert semantics
-              (same email twice should NOT error out).
-        - POST /api/razorpay/order { productId:'p-tote-terracotta' } → 503
-              { error:'payment_unconfigured', whatsappNumber } — EXPECTED (Buy Now disabled).
-        - POST /api/razorpay/verify with missing fields → 400
-        - POST /api/upload  (multipart/form-data, single 'file' field, header
-              x-upload-token: sutrakriti-dev-upload-token) with a small PNG/JPG:
-              → 200 { ok:true, url:'/products/<file>', ... }
-              Without token or wrong token → 401.
-              With mime text/plain → 415.
-              Verify row persists via /api/admin/uploads.
-        - GET /api/admin/custom-orders → 200 { orders:[...] }
-        - GET /api/admin/uploads → 200 { uploads:[...] }
-        - GET /api/admin/newsletter → 200 { subscribers:[...] }
+      Public flows (unchanged, retest to confirm):
+        - GET  /api/health → { ok:true, db:true, mail:false }
+        - GET  /api/products → 8 items (one now renamed to "Wildflower Posy")
+        - POST /api/custom-order → 200 { ok:true, id, emailStatus:'skipped' }
+        - POST /api/newsletter, POST /api/contact
+        - POST /api/upload (needs x-upload-token: sutrakriti-dev-upload-token)
+        - POST /api/razorpay/order → 503 payment_unconfigured (INTENTIONAL — do not flag)
 
-      DO NOT flag the 503 on /api/razorpay/order as a failure. That is the intentional MVP gate.
-      DO NOT flag emailStatus:'skipped' as a failure — SMTP is unconfigured in dev.
+      NEW admin auth:
+        - POST /api/admin/login  { password }
+            password="sutrakriti-admin-dev" (from ADMIN_PASSWORD in .env)
+            correct pw → 200 { ok:true } + Set-Cookie: sk_admin=<token>; HttpOnly; SameSite=Lax
+            wrong pw   → 401 { error:'invalid_credentials' }
+        - POST /api/admin/logout → 200 { ok:true } + Set-Cookie clearing sk_admin
+        - GET  /api/admin/me → 200 { authenticated:true } WITH cookie, 401 WITHOUT
+
+      Cookie enforcement — WITHOUT the sk_admin cookie every /admin/* route must return 401:
+        - GET  /api/admin/stats
+        - GET  /api/admin/custom-orders
+        - GET  /api/admin/uploads
+        - GET  /api/admin/contacts
+        - GET  /api/admin/newsletter
+        - GET  /api/admin/payments
+        - POST /api/admin/custom-orders/:id/action
+        - DELETE /api/admin/uploads/:id
+
+      WITH the cookie (after login):
+        - GET  /api/admin/stats → 200 with keys { orders:{total,pending,accepted,completed}, uploads, newsletter, contacts, payments:{n,paid}, recent }
+        - GET  /api/admin/custom-orders → 200 { orders:[…] }
+        - GET  /api/admin/custom-orders?status=new → filters
+        - GET  /api/admin/uploads, /admin/contacts, /admin/newsletter, /admin/payments → 200 lists
+
+      Order actions on POST /api/admin/custom-orders/:id/action:
+        Body { action, note?, timeline?, sendEmail? } where action ∈ { 'accept', 'complete', 'reopen', 'note' }.
+        Prereq: create a custom order first via POST /api/custom-order with an email so that acceptance email flow can be exercised.
+        Expected behavior:
+          - action='accept' → status becomes 'accepted', accepted_at populated, admin_note updated.
+              With sendEmail=true and NO SMTP configured, response contains emailStatus:'smtp_not_configured' (this is CORRECT — SMTP intentionally blank).
+              If order has no email → emailStatus:'no_email'.
+          - action='complete' → status becomes 'completed', completed_at populated.
+          - action='reopen'   → status back to 'new', accepted_at & completed_at nulled.
+          - action='note'     → admin_note updated; other fields unchanged.
+          - Invalid action → 400.
+          - Unknown order id → 404.
+
+      DELETE /api/admin/uploads/:id → 200 { ok:true } and file removed from public/products/. Unknown id → 404.
+
+      Admin password is 'sutrakriti-admin-dev'. Session cookie name is 'sk_admin' (HMAC-signed, 7-day max age).
+
+      Do NOT flag as failures:
+        - emailStatus:'skipped'/'smtp_not_configured' from custom-order/accept (SMTP intentionally blank).
+        - /api/razorpay/order returning 503 (intentional MVP gate).
   
   - agent: "testing"
     message: |
@@ -430,3 +592,74 @@ agent_communication:
       - Upload token authentication working correctly (x-upload-token: sutrakriti-dev-upload-token)
       
       No critical issues found. Backend is production-ready for MVP after MySQL migration.
+
+  - agent: "testing"
+    message: |
+      ✅ ALL BACKEND TESTS PASSED - ROUND 3 ADMIN DASHBOARD (35/35 - 100%)
+      
+      Comprehensive testing completed on admin authentication and all admin dashboard endpoints:
+      
+      PUBLIC ENDPOINTS (RE-TESTED - 8/8 PASSED):
+      1. ✅ GET /api/health - Returns { ok:true, db:true, mail:false }
+      2. ✅ GET /api/products - Returns 8 products
+      3. ✅ POST /api/custom-order - Creates order, emailStatus:'skipped' (CORRECT)
+      4. ✅ POST /api/newsletter - Subscribes email successfully
+      5. ✅ POST /api/contact - Stores contact successfully
+      6. ✅ POST /api/razorpay/order - Returns 503 payment_unconfigured (CORRECT)
+      7. ✅ POST /api/upload (with token) - Uploads file successfully
+      8. ✅ POST /api/upload (without token) - Returns 401 unauthorised (CORRECT)
+      
+      ADMIN AUTHENTICATION (4/4 PASSED):
+      9. ✅ POST /api/admin/login (wrong password) - Returns 401 invalid_credentials
+      10. ✅ POST /api/admin/login (correct password) - Returns 200, sets sk_admin cookie
+      11. ✅ GET /api/admin/me (without cookie) - Returns 401 unauthorised
+      12. ✅ GET /api/admin/me (with cookie) - Returns 200 authenticated:true
+      
+      COOKIE ENFORCEMENT (6/6 PASSED):
+      All /admin/* routes correctly return 401 WITHOUT sk_admin cookie:
+      13. ✅ GET /api/admin/stats - 401 without cookie
+      14. ✅ GET /api/admin/custom-orders - 401 without cookie
+      15. ✅ GET /api/admin/uploads - 401 without cookie
+      16. ✅ GET /api/admin/contacts - 401 without cookie
+      17. ✅ GET /api/admin/newsletter - 401 without cookie
+      18. ✅ GET /api/admin/payments - 401 without cookie
+      
+      ADMIN ENDPOINTS WITH COOKIE (7/7 PASSED):
+      19. ✅ GET /api/admin/stats - Returns dashboard stats (orders, uploads, newsletter, contacts, payments, recent)
+      20. ✅ GET /api/admin/custom-orders - Returns 3 orders
+      21. ✅ GET /api/admin/custom-orders?status=new - Returns 2 new orders (filtering works)
+      22. ✅ GET /api/admin/uploads - Returns 1 upload
+      23. ✅ GET /api/admin/contacts - Returns 2 contacts
+      24. ✅ GET /api/admin/newsletter - Returns 1 subscriber
+      25. ✅ GET /api/admin/payments - Returns 0 payments
+      
+      ORDER ACTIONS (6/6 PASSED):
+      26. ✅ POST /api/admin/custom-orders/:id/action (accept) - Status='accepted', emailStatus='smtp_not_configured' (CORRECT)
+      27. ✅ POST /api/admin/custom-orders/:id/action (complete) - Status='completed', completed_at populated
+      28. ✅ POST /api/admin/custom-orders/:id/action (reopen) - Status='new', accepted_at & completed_at nulled
+      29. ✅ POST /api/admin/custom-orders/:id/action (note) - admin_note updated only
+      30. ✅ POST /api/admin/custom-orders/:id/action (invalid action) - Returns 400 invalid action
+      31. ✅ POST /api/admin/custom-orders/:id/action (unknown id) - Returns 404 order not found
+      
+      FILE DELETION (2/2 PASSED):
+      32. ✅ DELETE /api/admin/uploads/:id - Deletes file from disk and database
+      33. ✅ DELETE /api/admin/uploads/:id (unknown id) - Returns 404 upload not found
+      
+      SESSION MANAGEMENT (2/2 PASSED):
+      34. ✅ Session persistence - Same cookie works for all admin endpoints
+      35. ✅ POST /api/admin/logout - Clears cookie successfully
+      
+      All endpoints tested against https://premium-threads-332.preview.emergentagent.com/api
+      
+      CRITICAL VALIDATIONS CONFIRMED:
+      - ✅ Admin password authentication working (sutrakriti-admin-dev)
+      - ✅ HMAC-signed cookie (sk_admin) with 7-day expiry working correctly
+      - ✅ Cookie enforcement on all /admin/* routes (except /admin/login) working
+      - ✅ Session persistence across multiple requests working
+      - ✅ Order action workflows (accept → complete → reopen → note) working
+      - ✅ emailStatus:'smtp_not_configured' is CORRECT (SMTP intentionally unconfigured)
+      - ✅ File upload and deletion working correctly
+      - ✅ Status filtering on custom orders working
+      - ✅ All error cases (401, 400, 404) handled correctly
+      
+      No critical issues found. Admin dashboard backend is fully functional and production-ready.
