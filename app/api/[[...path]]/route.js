@@ -103,8 +103,17 @@ async function handleRoute(request, { params }) {
   const route = `/${parts.join('/')}`
   const method = request.method
 
+  // Routes that must work even if the database is temporarily unreachable
+  const dbOptional = new Set(['/', '/products'])
+  const isProductDetail = route.startsWith('/products/')
+
   try {
-    await initSchema()
+    if (!(dbOptional.has(route) || isProductDetail)) {
+      await initSchema()
+    } else {
+      // best-effort schema init; ignore failure
+      try { await initSchema() } catch (e) { console.warn('[api] initSchema deferred:', e?.code || e?.message) }
+    }
 
     if (route === '/' && method === 'GET') {
       return ok({ message: 'SutraKriti API — Every thread tells a story.' })

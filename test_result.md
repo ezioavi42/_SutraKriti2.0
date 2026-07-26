@@ -462,11 +462,11 @@ backend:
 frontend:
   - task: "Luxury landing page (hero, story, collections, catalogue, why, personalisation, process, reviews, gallery, faq, newsletter, footer)"
     implemented: true
-    working: false
+    working: true
     file: "app/page.js"
-    stuck_count: 1
+    stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
@@ -474,18 +474,19 @@ frontend:
       - working: false
         agent: "testing"
         comment: "CRITICAL: Products not rendering. /api/products returns 500 (MariaDB not installed/running - ECONNREFUSED 127.0.0.1:3306). Featured Collections and Catalogue sections show only headings, ZERO product cards. Hydration fix VERIFIED WORKING (no console errors). Mobile layout fix CANNOT BE VERIFIED until database is fixed. Tested desktop (1920×1080) and mobile (390×844) - same issue on both."
+      - working: true
+        agent: "testing"
+        comment: "✅ BUG FIX VERIFICATION COMPLETE - ALL TESTS PASSED. Issue 1 (Hydration mismatch): VERIFIED FIXED - Zero hydration errors on both mobile (390×844) and desktop (1920×1080) viewports. No 'server rendered HTML didn't match' warnings. YarnParticles and PhilosophySparkles client-only rendering working correctly. Issue 2 (Mobile Featured Collections): VERIFIED FIXED - All 6 featured collection cards visible on mobile with images loaded (naturalWidth > 0 for all). Desktop asymmetric grid still correct (first card md:col-span-4 md:row-span-2, others md:col-span-2). Catalogue section shows 8 products in 2-column grid on mobile. /api/products endpoint now returns 200 (database restored and made resilient). All requirements met."
 
 metadata:
   created_by: "main_agent"
   version: "1.0"
-  test_sequence: 3
+  test_sequence: 4
   run_ui: false
 
 test_plan:
-  current_focus:
-    - "Luxury landing page (hero, story, collections, catalogue, why, personalisation, process, reviews, gallery, faq, newsletter, footer)"
-  stuck_tasks:
-    - "Luxury landing page (hero, story, collections, catalogue, why, personalisation, process, reviews, gallery, faq, newsletter, footer)"
+  current_focus: []
+  stuck_tasks: []
   test_all: false
   test_priority: "high_first"
 
@@ -767,3 +768,36 @@ agent_communication:
       - ✅ All error cases (401, 400, 404) handled correctly
       
       No critical issues found. Admin dashboard backend is fully functional and production-ready.
+
+  - agent: "testing"
+    message: |
+      ✅ BUG FIX VERIFICATION COMPLETE - ALL TESTS PASSED
+      
+      Verified both reported issues after MariaDB restoration and /api/products resilience fix:
+      
+      **ISSUE 1 - HYDRATION MISMATCH: ✅ VERIFIED FIXED**
+      - Tested on mobile (390×844) and desktop (1920×1080) viewports
+      - Zero hydration errors in console at both viewports
+      - No "server rendered HTML didn't match client" warnings
+      - YarnParticles and PhilosophySparkles client-only rendering working correctly
+      - Multiple page loads and reloads performed - no errors
+      
+      **ISSUE 2 - MOBILE FEATURED COLLECTIONS: ✅ VERIFIED FIXED**
+      - All 6 featured collection cards visible on mobile (390×844)
+      - All 6 product images loaded successfully (naturalWidth > 0)
+      - Cards render in proper grid: grid-cols-1 sm:grid-cols-2 md:grid-cols-6
+      - First card (Terracotta Tote) has hero layout on mobile (aspect-square)
+      - Desktop asymmetric grid still correct (first card md:col-span-4 md:row-span-2)
+      - Catalogue section shows 8 products in 2-column grid on mobile
+      
+      **INFRASTRUCTURE:**
+      - /api/products endpoint now returns 200 (database restored and made resilient)
+      - Products fetch completes successfully and hydrates the UI
+      - No console errors or network failures
+      
+      **SCREENSHOTS CAPTURED:**
+      - Mobile collections (top, middle views)
+      - Mobile catalogue (2-column grid)
+      - Desktop collections (asymmetric 6-card grid)
+      
+      All requirements from the review request have been met. Both bug fixes are working correctly.
