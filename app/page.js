@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence, useScroll, useTransform, useMotionValue, useSpring } from 'framer-motion'
 import {
   ArrowRight, ArrowUpRight, Sparkles, Heart, Leaf, Gift, ShieldCheck, Palette, Feather, Award,
-  Instagram, Mail, MessageCircle, Star, ChevronDown, ShoppingBag, Menu, Send, Truck, Package, Scissors
+  Instagram, Mail, MessageCircle, Star, ChevronDown, ChevronLeft, ChevronRight, ShoppingBag, Menu, Send, Truck, Package, Scissors
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -520,7 +520,7 @@ function Collections({ products, onView }) {
               onClick={() => onView(p)}
               className={`luxury-card group relative overflow-hidden rounded-[1.75rem] bg-cream text-left w-full aspect-square ${i === 0 ? 'sm:col-span-2 md:col-span-4 md:row-span-2 md:aspect-[16/13]' : 'md:col-span-2'}`}
             >
-              <img src={p.image} alt={p.name} className="absolute inset-0 w-full h-full object-cover transition-transform duration-[1200ms] group-hover:scale-[1.08]" />
+              <img src={p.image} alt={p.name} loading="lazy" decoding="async" className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.06]" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
               {p.bestseller && <Badge className="absolute top-4 left-4 bg-terracotta text-white border-0">Bestseller</Badge>}
               {p.new && <Badge className="absolute top-4 left-4 bg-sage text-white border-0">New</Badge>}
@@ -564,39 +564,40 @@ function Catalogue({ products, onView }) {
           </div>
         </div>
 
-        <motion.div layout className="grid grid-cols-2 md:grid-cols-4 gap-5 md:gap-8">
-          <AnimatePresence>
-            {filtered.map((p, i) => (
-              <motion.button
-                layout
-                key={p.id}
-                initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 24 }}
-                transition={{ duration: 0.5, delay: (i % 4) * 0.05 }}
-                onClick={() => onView(p)}
-                className="group text-left"
-              >
-                <div className="relative overflow-hidden rounded-[1.25rem] aspect-[4/5] bg-beige">
-                  <img src={p.image} alt={p.name} className="absolute inset-0 w-full h-full object-cover transition-transform duration-[1200ms] group-hover:scale-105" />
-                  <div className="absolute top-3 left-3 flex gap-1">
-                    {p.new && <Badge className="bg-sage text-white border-0">New</Badge>}
-                    {p.bestseller && <Badge className="bg-terracotta text-white border-0">Bestseller</Badge>}
-                  </div>
-                  <div className="absolute inset-x-3 bottom-3 flex items-center justify-between opacity-0 translate-y-3 group-hover:opacity-100 group-hover:translate-y-0 transition-all">
-                    <span className="text-xs px-2.5 py-1 rounded-full bg-white/90 text-charcoal">Quick View</span>
-                    <span className="h-8 w-8 rounded-full bg-terracotta text-white flex items-center justify-center"><ArrowUpRight className="h-4 w-4" /></span>
-                  </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-5 md:gap-8">
+          {filtered.map((p, i) => (
+            <button
+              key={p.id}
+              onClick={() => onView(p)}
+              className="group text-left"
+            >
+              <div className="relative overflow-hidden rounded-[1.25rem] aspect-[4/5] bg-beige">
+                <img
+                  src={p.image}
+                  alt={p.name}
+                  loading="lazy"
+                  decoding="async"
+                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                />
+                <div className="absolute top-3 left-3 flex gap-1">
+                  {p.new && <Badge className="bg-sage text-white border-0">New</Badge>}
+                  {p.bestseller && <Badge className="bg-terracotta text-white border-0">Bestseller</Badge>}
                 </div>
-                <div className="mt-3 flex items-start justify-between gap-3">
-                  <div>
-                    <div className="text-[10px] tracking-[0.2em] uppercase text-charcoal/50">{p.category}</div>
-                    <div className="font-serif text-lg text-charcoal">{p.name}</div>
-                  </div>
-                  <div className="font-serif text-lg text-terracotta whitespace-nowrap">₹{p.price.toLocaleString('en-IN')}</div>
+                <div className="absolute inset-x-3 bottom-3 flex items-center justify-between opacity-0 translate-y-3 group-hover:opacity-100 group-hover:translate-y-0 transition-all">
+                  <span className="text-xs px-2.5 py-1 rounded-full bg-white/90 text-charcoal">Quick View</span>
+                  <span className="h-8 w-8 rounded-full bg-terracotta text-white flex items-center justify-center"><ArrowUpRight className="h-4 w-4" /></span>
                 </div>
-              </motion.button>
-            ))}
-          </AnimatePresence>
-        </motion.div>
+              </div>
+              <div className="mt-3 flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-[10px] tracking-[0.2em] uppercase text-charcoal/50">{p.category}</div>
+                  <div className="font-serif text-lg text-charcoal">{p.name}</div>
+                </div>
+                <div className="font-serif text-lg text-terracotta whitespace-nowrap">₹{p.price.toLocaleString('en-IN')}</div>
+              </div>
+            </button>
+          ))}
+        </div>
       </div>
     </section>
   )
@@ -768,7 +769,7 @@ function Gallery() {
               onClick={() => setOpen(g.src)}
               className="group block w-full overflow-hidden rounded-2xl relative"
             >
-              <img src={g.src} alt="SutraKriti gallery" style={{ height: g.h }} className="w-full object-cover transition-transform duration-[1200ms] group-hover:scale-105" />
+              <img src={g.src} alt="SutraKriti gallery" loading="lazy" decoding="async" style={{ height: g.h }} className="w-full object-cover transition-transform duration-500 group-hover:scale-105" />
               <div className="absolute inset-0 bg-charcoal/0 group-hover:bg-charcoal/20 transition-colors" />
             </motion.button>
           ))}
@@ -891,6 +892,82 @@ function Info({ label, value }) {
   )
 }
 
+function ProductGallery({ images, name }) {
+  const list = images && images.length ? images : []
+  const [idx, setIdx] = useState(0)
+  useEffect(() => { setIdx(0) }, [images])
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'ArrowRight') setIdx(i => (i + 1) % list.length)
+      else if (e.key === 'ArrowLeft') setIdx(i => (i - 1 + list.length) % list.length)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [list.length])
+  if (!list.length) return null
+  const prev = () => setIdx(i => (i - 1 + list.length) % list.length)
+  const next = () => setIdx(i => (i + 1) % list.length)
+
+  return (
+    <div className="relative w-full h-full bg-beige/40 select-none">
+      <div className="relative w-full aspect-square md:aspect-auto md:h-full overflow-hidden">
+        <motion.div
+          key={idx}
+          drag={list.length > 1 ? 'x' : false}
+          dragConstraints={{ left: 0, right: 0 }}
+          dragElastic={0.3}
+          onDragEnd={(_, info) => {
+            if (info.offset.x < -60) next()
+            else if (info.offset.x > 60) prev()
+          }}
+          initial={{ opacity: 0.3 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.35 }}
+          className="w-full h-full cursor-grab active:cursor-grabbing touch-pan-y"
+          role="img"
+          aria-label={`${name} — image ${idx + 1} of ${list.length}`}
+        >
+          <img
+            src={list[idx]}
+            alt={`${name} — ${idx + 1}`}
+            draggable={false}
+            loading="eager"
+            className="w-full h-full object-cover pointer-events-none"
+          />
+        </motion.div>
+      </div>
+
+      {list.length > 1 && (
+        <>
+          <button
+            type="button" onClick={prev} aria-label="Previous image"
+            className="absolute left-2 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-white/85 hover:bg-white shadow-lg text-charcoal flex items-center justify-center backdrop-blur"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <button
+            type="button" onClick={next} aria-label="Next image"
+            className="absolute right-2 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-white/85 hover:bg-white shadow-lg text-charcoal flex items-center justify-center backdrop-blur"
+          >
+            <ChevronRight className="h-5 w-5" />
+          </button>
+          <div className="absolute inset-x-0 bottom-3 flex items-center justify-center gap-1.5">
+            {list.map((_, i) => (
+              <button
+                key={i} type="button" onClick={() => setIdx(i)} aria-label={`Show image ${i + 1}`}
+                className={`h-1.5 rounded-full transition-all ${i === idx ? 'w-6 bg-white' : 'w-1.5 bg-white/60 hover:bg-white/80'}`}
+              />
+            ))}
+          </div>
+          <div className="absolute top-3 right-3 text-[11px] tracking-widest uppercase bg-black/40 text-white px-2 py-0.5 rounded-full backdrop-blur">
+            {idx + 1} / {list.length}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 function ProductModal({ product, open, onClose, onCustom }) {
   const [busy, setBusy] = useState(false)
   if (!product) return null
@@ -959,48 +1036,50 @@ Thank you!`
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl bg-cream border-beige p-0 overflow-hidden">
-        <div className="grid md:grid-cols-2">
-          <div className="relative aspect-square md:aspect-auto">
-            <img src={product.image} alt={product.name} className="absolute inset-0 w-full h-full object-cover" />
-          </div>
-          <div className="p-6 md:p-8">
-            <div className="text-[10px] tracking-[0.3em] uppercase text-terracotta">{product.category}</div>
-            <DialogHeader className="mt-2 p-0">
-              <DialogTitle className="font-serif text-3xl text-charcoal text-left">{product.name}</DialogTitle>
-            </DialogHeader>
-            <div className="mt-1 font-serif text-2xl text-terracotta">₹{product.price.toLocaleString('en-IN')}</div>
-            <p className="mt-4 text-charcoal/70 leading-relaxed">{product.description}</p>
-            <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
-              <Info label="Material" value={product.material} />
-              <Info label="Dimensions" value={product.dimensions} />
-              <Info label="Care" value={product.care} />
-              <Info label="Delivery" value={product.delivery} />
+      <DialogContent className="max-w-4xl bg-cream border-beige p-0 overflow-hidden max-h-[92vh] md:max-h-[88vh] flex flex-col">
+        <div className="flex-1 overflow-y-auto overscroll-contain">
+          <div className="grid md:grid-cols-2">
+            <div className="relative md:sticky md:top-0 md:h-[88vh] md:max-h-full">
+              <ProductGallery images={product.images && product.images.length ? product.images : [product.image]} name={product.name} />
             </div>
-            {product.colors?.length ? (
-              <div className="mt-5">
-                <div className="text-[10px] tracking-[0.2em] uppercase text-charcoal/50">Available in</div>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {product.colors.map(c => <span key={c} className="text-xs rounded-full border border-beige px-3 py-1 bg-ivory">{c}</span>)}
+            <div className="p-6 md:p-8">
+              <div className="text-[10px] tracking-[0.3em] uppercase text-terracotta">{product.category}</div>
+              <DialogHeader className="mt-2 p-0">
+                <DialogTitle className="font-serif text-3xl text-charcoal text-left">{product.name}</DialogTitle>
+              </DialogHeader>
+              <div className="mt-1 font-serif text-2xl text-terracotta">₹{product.price.toLocaleString('en-IN')}</div>
+              <p className="mt-4 text-charcoal/70 leading-relaxed">{product.description}</p>
+              <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
+                <Info label="Material" value={product.material} />
+                <Info label="Dimensions" value={product.dimensions} />
+                <Info label="Care" value={product.care} />
+                <Info label="Delivery" value={product.delivery} />
+              </div>
+              {product.colors?.length ? (
+                <div className="mt-5">
+                  <div className="text-[10px] tracking-[0.2em] uppercase text-charcoal/50">Available in</div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {product.colors.map(c => <span key={c} className="text-xs rounded-full border border-beige px-3 py-1 bg-ivory">{c}</span>)}
+                  </div>
                 </div>
-              </div>
-            ) : null}
-            <div className="mt-7 flex flex-col sm:flex-row gap-2">
-              {buyEnabled && (
-                <Button onClick={buyNow} disabled={busy} className="btn-luxury bg-terracotta hover:bg-[color:var(--sk-terracotta-dark)] text-white rounded-full h-11 flex-1">
-                  {busy ? 'Opening…' : 'Buy Now'} <ShoppingBag className="ml-2 h-4 w-4" />
+              ) : null}
+              <div className="mt-7 flex flex-col sm:flex-row gap-2">
+                {buyEnabled && (
+                  <Button onClick={buyNow} disabled={busy} className="btn-luxury bg-terracotta hover:bg-[color:var(--sk-terracotta-dark)] text-white rounded-full h-11 flex-1">
+                    {busy ? 'Opening…' : 'Buy Now'} <ShoppingBag className="ml-2 h-4 w-4" />
+                  </Button>
+                )}
+                <Button onClick={orderWhats} className={`rounded-full h-11 flex-1 ${buyEnabled ? 'bg-transparent border border-charcoal/20 text-charcoal hover:bg-beige' : 'btn-luxury bg-terracotta hover:bg-[color:var(--sk-terracotta-dark)] text-white'}`}>
+                  Order on WhatsApp <MessageCircle className="ml-2 h-4 w-4" />
                 </Button>
-              )}
-              <Button onClick={orderWhats} className={`rounded-full h-11 flex-1 ${buyEnabled ? 'bg-transparent border border-charcoal/20 text-charcoal hover:bg-beige' : 'btn-luxury bg-terracotta hover:bg-[color:var(--sk-terracotta-dark)] text-white'}`}>
-                Order on WhatsApp <MessageCircle className="ml-2 h-4 w-4" />
-              </Button>
-            </div>
-            {!buyEnabled && (
-              <div className="mt-2 text-[11px] text-charcoal/50 tracking-wide">
-                Online checkout coming soon. For now, orders are placed via WhatsApp.
               </div>
-            )}
-            <button onClick={() => { onClose(); onCustom() }} className="mt-4 text-sm text-charcoal/70 link-underline">Want it in a different colour or size? Request a custom piece →</button>
+              {!buyEnabled && (
+                <div className="mt-2 text-[11px] text-charcoal/50 tracking-wide">
+                  Online checkout coming soon. For now, orders are placed via WhatsApp.
+                </div>
+              )}
+              <button onClick={() => { onClose(); onCustom() }} className="mt-4 text-sm text-charcoal/70 link-underline">Want it in a different colour or size? Request a custom piece →</button>
+            </div>
           </div>
         </div>
       </DialogContent>

@@ -801,3 +801,168 @@ agent_communication:
       - Desktop collections (asymmetric 6-card grid)
       
       All requirements from the review request have been met. Both bug fixes are working correctly.
+
+agent_communication:
+  - agent: "main"
+    message: |
+      BUG FIX — Please verify THREE reported issues in the product-modal / catalogue flow.
+
+      Base URL: NEXT_PUBLIC_BASE_URL from /app/.env
+      Do NOT test unrelated flows.
+
+      ISSUE 1 — Product modal cannot be scrolled to see the order buttons
+        Root cause: DialogContent had no internal scroll area; on shorter viewports
+        (especially mobile) the description / material / delivery blocks pushed the
+        Buy Now / WhatsApp / custom-order buttons off-screen and the whole modal was
+        clipped by max-viewport height with no overflow-y.
+        Fix: DialogContent is now `max-h-[92vh] md:max-h-[88vh] flex flex-col` and
+        contains a single scrollable div `flex-1 overflow-y-auto overscroll-contain`
+        that wraps the grid. The image column is `md:sticky md:top-0 md:h-[88vh]`
+        so on desktop the image stays visible while the right column scrolls; on
+        mobile the whole modal scrolls top-to-bottom.
+
+        Verify at BOTH desktop (1920x1080) and mobile (390x844):
+          1. Click any featured collection card (e.g. "Terracotta Tote Bag").
+          2. Verify the "Order on WhatsApp" button is reachable — either directly
+             visible OR by scrolling inside the modal (NOT scrolling the page).
+             Mobile especially: expect the modal itself to scroll and the WhatsApp
+             button to be visible at the bottom.
+          3. Verify the "Want it in a different colour or size? Request a custom
+             piece →" link is also accessible below the buttons.
+
+      ISSUE 2 — Product view / catalogue feels slow
+        Root cause: The Catalogue grid used `<motion.div layout>` wrapping an
+        `<AnimatePresence>` with `<motion.button layout>` for each of the 8 tiles —
+        `layout` forces expensive per-frame reflow measurements. No product image
+        had `loading="lazy"`, so 8 catalogue + 6 featured + 11 gallery images all
+        downloaded eagerly on first paint.
+        Fix:
+          - Removed `<motion.div layout>` + `<AnimatePresence>` + `<motion.button layout>`
+            from Catalogue. Tiles are now plain <button>s (still with CSS hover).
+          - Added `loading="lazy"` and `decoding="async"` to every product image
+            (Catalogue tiles, Featured Collection cards, Gallery masonry).
+          - Shortened image hover transform from 1200ms to 500ms.
+
+        Verify:
+          1. At desktop viewport, scroll from the top to the Catalogue section.
+          2. It should feel smooth. Try switching category filters (All / Handbags /
+             Potli Bags / Flowers / Home Decor) — filtering should be instant with
+             no reflow jank.
+          3. Verify catalogue images have `loading="lazy"` attribute in the DOM
+             (query `#catalogue img[loading="lazy"]` — expect >= 4 lazy images
+             depending on the active filter; with the default 'All' filter, all
+             8 tiles should be lazy-loaded).
+
+      ISSUE 3 — Multiple images per product with swipe navigation
+        Fix: Every product in `lib/products.js` now has an `images: [...]` array
+        (2–3 images each). The ProductModal has a NEW <ProductGallery /> component
+        with:
+          - Left/right arrow buttons (visible when images.length > 1)
+          - Dot indicators at the bottom (active dot is longer)
+          - "1 / N" counter chip at top-right
+          - Drag/swipe support via framer-motion `drag="x"` — swipe left > 60px
+            calls next(), swipe right > 60px calls prev()
+          - Keyboard ArrowLeft / ArrowRight support
+          - When only 1 image is present, arrows/dots/counter are hidden.
+
+        Verify:
+          1. Open "Terracotta Tote Bag" — it has 3 images.
+             - Verify arrows are present (query aria-label="Next image" and
+               aria-label="Previous image").
+             - Verify "1 / 3" counter is visible.
+             - Verify 3 dot indicators are present.
+             - Click "Next image" → counter should read "2 / 3" and image src changes.
+             - Click a dot indicator → image should jump.
+             - Press keyboard ArrowRight / ArrowLeft → image should advance / go back.
+             - On mobile, simulate a swipe/drag left on the image (Playwright's
+               page.mouse.move + down + move + up sequence) and verify next image loads.
+          2. Open "Ivory Market Tote" — 2 images. Verify controls appear.
+
+      Please report PASS only if all three issues are cleanly fixed with zero
+      regressions in the previously working flows (Featured Collections still
+      shows 6 cards on mobile; Catalogue still shows 8 cards; no hydration errors).
+  
+  - agent: "testing"
+    message: |
+      ✅ ALL THREE BUG FIXES VERIFIED - 100% PASS
+      
+      Comprehensive testing completed on all three reported issues:
+      
+      **ISSUE 1 - PRODUCT MODAL SCROLL: ✅ VERIFIED FIXED**
+      Desktop (1920×1080):
+        - Opened Terracotta Tote Bag modal
+        - "Order on WhatsApp" button: DIRECTLY VISIBLE (no scroll needed)
+        - "Request a custom piece →" link: DIRECTLY VISIBLE
+        - Modal layout working perfectly with max-h-[92vh] md:max-h-[88vh]
+        - Screenshot: modal-desktop-top.png
+      
+      Mobile (390×844):
+        - Opened Terracotta Tote Bag modal
+        - "Order on WhatsApp" button: DIRECTLY VISIBLE (no scroll needed)
+        - Modal scrollable container working correctly
+        - Screenshot: modal-mobile-scroll.png
+      
+      Result: Modal scroll fix is working BETTER than expected — buttons are directly
+      visible on both viewports without needing to scroll. The flex-1 overflow-y-auto
+      container is properly sized and content fits within viewport.
+      
+      **ISSUE 2 - CATALOGUE PERFORMANCE: ✅ VERIFIED FIXED**
+      Lazy Loading:
+        - Found 8 catalogue images with loading="lazy" attribute
+        - Requirement was >= 4, achieved 8/8 (100%)
+        - Featured Collections and Gallery images also have lazy loading
+      
+      Category Filtering (Desktop):
+        - All: 8 products displayed
+        - Handbags: 2 products displayed
+        - Potli Bags: 1 product displayed
+        - Flowers: 2 products displayed
+        - Home Decor: 3 products displayed
+        - Filtering is INSTANT with no layout thrash
+        - No Framer Motion layout animations causing reflow
+      
+      Result: Catalogue performance is significantly improved. Category switching is
+      snappy and smooth. Lazy loading working correctly on all product images.
+      
+      **ISSUE 3 - IMAGE CAROUSEL: ✅ VERIFIED FIXED**
+      Terracotta Tote Bag (3 images):
+        - ✅ Left/right arrow buttons present (aria-label="Previous image" and "Next image")
+        - ✅ Counter chip shows "1 / 3" initially
+        - ✅ 3 dot indicators present at bottom
+        - ✅ Clicking "Next image" → counter updates to "2 / 3", image src changes
+        - ✅ Clicking third dot → counter updates to "3 / 3", image jumps
+        - ✅ Keyboard ArrowRight → counter wraps to "1 / 3" (from last image)
+        - ✅ Keyboard ArrowLeft → counter wraps to "3 / 3" (from first image)
+        - ✅ Mouse drag/swipe left → image advances to next
+        - Screenshot: carousel-terracotta.png
+      
+      Ivory Market Tote (2 images):
+        - ✅ Arrow buttons present
+        - ✅ Counter chip shows "1 / 2" initially
+        - ✅ 2 dot indicators present
+        - ✅ Clicking "Next image" → counter updates to "2 / 2"
+        - Screenshot: carousel-ivory.png
+      
+      Result: ProductGallery component working perfectly with all features:
+      arrows, counter, dots, keyboard navigation, and drag/swipe gestures.
+      
+      **REGRESSION CHECKS: ✅ ALL PASS**
+      - ✅ Zero hydration errors detected (no "server rendered HTML didn't match" warnings)
+      - ✅ Featured Collections shows all 6 cards on mobile (390×844)
+      - ✅ All 6 product images loaded on mobile (naturalWidth > 0 for all)
+      - ✅ Catalogue shows 8 products in 2-column grid on mobile
+      
+      **SCREENSHOTS CAPTURED:**
+      - modal-desktop-top.png (desktop modal with WhatsApp button visible)
+      - modal-mobile-scroll.png (mobile modal with WhatsApp button visible)
+      - carousel-terracotta.png (3-image carousel with controls)
+      - carousel-ivory.png (2-image carousel with controls)
+      
+      **FINAL VERDICT:**
+      All three issues are COMPLETELY FIXED with zero regressions. The product modal
+      scroll fix works perfectly on both desktop and mobile. Catalogue performance is
+      significantly improved with lazy loading and removal of layout animations. Image
+      carousel is fully functional with all navigation methods (arrows, dots, keyboard,
+      swipe). No hydration errors. All regression checks pass.
+      
+      READY FOR PRODUCTION. 🎉
