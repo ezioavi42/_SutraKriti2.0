@@ -4,7 +4,7 @@ import crypto from 'crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { query, initSchema } from '@/lib/db'
-import { sendMail, renderCustomOrderEmail, renderOrderAcceptanceEmail, isMailConfigured } from '@/lib/mailer'
+import { sendMail, renderCustomOrderEmail, renderOrderAcceptanceEmail, renderCustomerAcknowledgementEmail, isMailConfigured } from '@/lib/mailer'
 import { PRODUCTS } from '@/lib/products'
 
 export const runtime = 'nodejs'
@@ -121,40 +121,63 @@ async function handleRoute(request, { params }) {
       return ok({ product })
     }
 
-    // Custom order enquiry -> MySQL + email
+    // Custom order enquiry -> MySQL + email (studio) + acknowledgement (customer)
     if (route === '/custom-order' && method === 'POST') {
       const body = await request.json()
       if (!body.name || !body.contact) return err('name and contact required', 400)
+      if (!body.email) return err('email required', 400, { message: 'Email is required so we can send you an acknowledgement.' })
+      if (!/^\S+@\S+\.\S+$/.test(String(body.email))) return err('invalid email', 400)
+
       const id = uuidv4()
       await query(
         `INSERT INTO custom_orders
           (id, name, contact, email, product_type, colors, size, budget, occasion, reference_image, notes)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [id, body.name, body.contact, body.email || null, body.productType || null,
+        [id, body.name, body.contact, body.email, body.productType || null,
          body.colors || null, body.size || null, body.budget || null, body.occasion || null,
          body.referenceImage || null, body.notes || null]
       )
 
-      // Send email notification (non-blocking failure)
-      const to = process.env.ORDERS_EMAIL || process.env.BRAND_EMAIL || ''
-      let emailStatus = 'skipped'
-      if (to && isMailConfigured()) {
+      let studioEmailStatus = 'skipped'
+      let customerEmailStatus = 'skipped'
+
+      if (isMailConfigured()) {
+        // 1) Notify the studio
         try {
-          const { html, text } = renderCustomOrderEmail(body)
-          const res = await sendMail({
-            to,
-            subject: `New Custom Order · ${body.name}${body.productType ? ' · ' + body.productType : ''}`,
-            html, text,
-            replyTo: body.email || undefined,
-          })
-          emailStatus = res.ok ? 'sent' : 'failed'
+          const to = process.env.ORDERS_EMAIL || process.env.BRAND_EMAIL || ''
+          if (to) {
+            const { html, text } = renderCustomOrderEmail(body)
+            const r = await sendMail({
+              to,
+              subject: `New Custom Order · ${body.name}${body.productType ? ' · ' + body.productType : ''}`,
+              html, text,
+              replyTo: body.email || undefined,
+            })
+            studioEmailStatus = r.ok ? 'sent' : 'failed'
+          }
         } catch (e) {
-          console.error('[custom-order] email failed:', e?.message)
-          emailStatus = 'failed'
+          console.error('[custom-order] studio email failed:', e?.message)
+          studioEmailStatus = 'failed'
+        }
+
+        // 2) Acknowledge the customer
+        try {
+          const { html, text, subject } = renderCustomerAcknowledgementEmail(body)
+          const r = await sendMail({
+            to: body.email,
+            subject,
+            html,
+            text,
+            replyTo: process.env.ORDERS_EMAIL || undefined,
+          })
+          customerEmailStatus = r.ok ? 'sent' : 'failed'
+        } catch (e) {
+          console.error('[custom-order] customer email failed:', e?.message)
+          customerEmailStatus = 'failed'
         }
       }
 
-      return ok({ ok: true, id, emailStatus })
+      return ok({ ok: true, id, emailStatus: studioEmailStatus, customerEmailStatus })
     }
 
     // Contact form

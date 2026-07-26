@@ -487,7 +487,23 @@ test_plan:
 agent_communication:
   - agent: "main"
     message: |
-      ROUND 3 — Admin dashboard + authenticated /admin/* routes.
+      ROUND 4 delta — please re-test the following changes:
+
+      1) POST /api/custom-order now REQUIRES a valid email (previously optional).
+         - Missing email → 400 { error:'email required' }
+         - Malformed email (e.g. "abc") → 400 { error:'invalid email' }
+         - Valid body (with email + name + contact) → 200 { ok:true, id, emailStatus, customerEmailStatus }
+           * SMTP is intentionally unconfigured → BOTH emailStatus and customerEmailStatus should be 'skipped'.
+           * If SMTP were configured, emailStatus would be 'sent' (studio notification) and
+             customerEmailStatus would be 'sent' (auto-acknowledgement to the customer's email).
+      2) All other endpoints unchanged from round 3 — please re-run the full regression suite
+         (public + admin auth + admin actions + upload) to confirm nothing broke.
+
+      Same caveats as before:
+       - Do NOT flag 'skipped' / 'smtp_not_configured' email statuses as failures.
+       - Do NOT flag /api/razorpay/order returning 503 as a failure.
+
+      Admin password remains 'sutrakriti-admin-dev'. All admin flows unchanged.
 
       NEW/CHANGED endpoints to test (base = NEXT_PUBLIC_BASE_URL + /api):
 

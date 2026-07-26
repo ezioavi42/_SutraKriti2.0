@@ -62,7 +62,7 @@ const WHYS = [
 ]
 
 const FAQS = [
-  { q: 'How do I place a custom order and what is the payment process?', a: 'Fill the Custom Order form on this page (or reach us on WhatsApp) with your colours, size, occasion and a reference image. After a short discussion about your piece, payment must be made in advance via UPI and/or a secured payment link — details are shared with you on our WhatsApp Business account. Only once payment is confirmed do we reserve materials and begin crafting.' },
+  { q: 'How do I place an order and what is the payment process?', a: 'For collection pieces, tap “Order on WhatsApp” on any product — this opens WhatsApp with your product details pre-filled. For custom orders, fill the Custom Order form (or message us on WhatsApp) with your colours, size, occasion and a reference image. In both cases, after a short discussion about your piece, payment must be made in advance via UPI and/or a secured payment link — details are shared with you on our WhatsApp Business account. Only once payment is confirmed do we reserve materials and either dispatch (collection) or begin crafting (custom).' },
   { q: 'How long does a custom order take?', a: 'Depending on complexity, custom orders typically take 2–4 weeks after payment. We will confirm the exact timeline for your piece before starting.' },
   { q: 'Do you ship internationally?', a: 'Yes, we ship worldwide. International orders take 10–21 business days after dispatch.' },
   { q: 'How should I care for my crochet piece?', a: 'Hand wash in cold water with mild detergent, reshape while damp and dry flat. Avoid direct sunlight.' },
@@ -886,7 +886,22 @@ function ProductModal({ product, open, onClose, onCustom }) {
       const r = await fetch('/api/razorpay/order', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ productId: product.id }) })
       if (r.status === 503) {
         toast.message('Online payment is being set up. Opening WhatsApp for direct order.')
-        window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(`Hi SutraKriti, I would like to order: ${product.name} (₹${product.price}). Please share the payment details.`)}`, '_blank')
+        const priceStr = `\u20b9${Number(product.price).toLocaleString('en-IN')}`
+        const colours = product.colors?.length ? `\nColours: ${product.colors.join(', ')}` : ''
+        const t = `Hello SutraKriti, I would like to order the following piece from your collection:
+
+\u2022 Product: ${product.name}
+\u2022 Category: ${product.category}
+\u2022 Price: ${priceStr}${colours}
+\u2022 Reference: ${product.id}
+
+Could you please confirm:
+1) Availability of this piece
+2) A secured payment link / UPI details
+3) Expected delivery time to my location
+
+Thank you!`
+        window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(t)}`, '_blank')
         return
       }
       const data = await r.json()
@@ -909,7 +924,21 @@ function ProductModal({ product, open, onClose, onCustom }) {
     } finally { setBusy(false) }
   }
   const orderWhats = () => {
-    const t = `Hi SutraKriti, I would like to order: ${product.name} (₹${product.price}). Please share the payment details.`
+    const priceStr = `\u20b9${Number(product.price).toLocaleString('en-IN')}`
+    const colours = product.colors?.length ? `\nColours: ${product.colors.join(', ')}` : ''
+    const t = `Hello SutraKriti, I would like to order the following piece from your collection:
+
+\u2022 Product: ${product.name}
+\u2022 Category: ${product.category}
+\u2022 Price: ${priceStr}${colours}
+\u2022 Reference: ${product.id}
+
+Could you please confirm:
+1) Availability of this piece
+2) A secured payment link / UPI details
+3) Expected delivery time to my location
+
+Thank you!`
     window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(t)}`, '_blank')
   }
 
@@ -971,11 +1000,18 @@ function CustomOrderModal({ open, onClose }) {
   const submit = async (e) => {
     e.preventDefault()
     if (!form.name || !form.contact) { toast.error('Name and contact required'); return }
+    if (!form.email) { toast.error('Email is required — we will send you an acknowledgement.'); return }
+    if (!/^\S+@\S+\.\S+$/.test(form.email)) { toast.error('Please enter a valid email address.'); return }
     setBusy(true)
     try {
       const r = await fetch('/api/custom-order', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
       if (r.ok) {
-        toast.success('Enquiry received. We will reach out within 24 hours.')
+        const j = await r.json().catch(() => ({}))
+        if (j.customerEmailStatus === 'sent') {
+          toast.success('Enquiry received. Check your inbox for our acknowledgement — we will reach out within 24 hours.')
+        } else {
+          toast.success('Enquiry received. We will reach out within 24 hours.')
+        }
         onClose()
         setForm({ name: '', contact: '', email: '', productType: '', colors: '', size: '', budget: '', occasion: '', referenceImage: '', notes: '' })
       } else toast.error('Something went wrong.')
@@ -992,7 +1028,7 @@ function CustomOrderModal({ open, onClose }) {
         <form onSubmit={submit} className="grid md:grid-cols-2 gap-3">
           <Input required placeholder="Your name *" value={form.name} onChange={e=>set('name', e.target.value)} className="bg-ivory border-beige" />
           <Input required placeholder="Phone / WhatsApp *" value={form.contact} onChange={e=>set('contact', e.target.value)} className="bg-ivory border-beige" />
-          <Input placeholder="Email" type="email" value={form.email} onChange={e=>set('email', e.target.value)} className="bg-ivory border-beige md:col-span-2" />
+          <Input required placeholder="Email * (we will send you an acknowledgement)" type="email" value={form.email} onChange={e=>set('email', e.target.value)} className="bg-ivory border-beige md:col-span-2" />
           <Input placeholder="Product type (e.g. potli, bouquet, blanket)" value={form.productType} onChange={e=>set('productType', e.target.value)} className="bg-ivory border-beige" />
           <Input placeholder="Occasion (wedding, baby, corporate…)" value={form.occasion} onChange={e=>set('occasion', e.target.value)} className="bg-ivory border-beige" />
           <Input placeholder="Colour preferences" value={form.colors} onChange={e=>set('colors', e.target.value)} className="bg-ivory border-beige" />
