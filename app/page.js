@@ -71,20 +71,24 @@ const FAQS = [
 ]
 
 function YarnParticles({ count = 22 }) {
-  const items = useMemo(() => (
-    Array.from({ length: count }).map((_, i) => {
-      const size = 4 + Math.random() * 10
-      return {
-        i, size,
-        left: Math.random() * 100,
-        top: 60 + Math.random() * 40,
-        dur: 8 + Math.random() * 10,
-        delay: Math.random() * 8,
-        tx: (Math.random() - 0.5) * 120,
-        ty: -(140 + Math.random() * 200),
-      }
-    })
-  ), [count])
+  const [items, setItems] = useState([])
+  useEffect(() => {
+    setItems(
+      Array.from({ length: count }).map((_, i) => {
+        const size = 4 + Math.random() * 10
+        return {
+          i, size,
+          left: Math.random() * 100,
+          top: 60 + Math.random() * 40,
+          dur: 8 + Math.random() * 10,
+          delay: Math.random() * 8,
+          tx: (Math.random() - 0.5) * 120,
+          ty: -(140 + Math.random() * 200),
+        }
+      })
+    )
+  }, [count])
+  if (items.length === 0) return null
   return (
     <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden>
       {items.map(p => (
@@ -359,6 +363,31 @@ function TrustMarquee() {
   )
 }
 
+function PhilosophySparkles() {
+  const [ready, setReady] = useState(false)
+  useEffect(() => setReady(true), [])
+  if (!ready) return null
+  return (
+    <>
+      {Array.from({ length: 6 }).map((_, i) => {
+        const angle = (i / 6) * Math.PI * 2
+        const r = 46
+        const left = (50 + Math.cos(angle) * r).toFixed(4)
+        const top = (50 + Math.sin(angle) * r).toFixed(4)
+        return (
+          <motion.span
+            key={i}
+            initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
+            transition={{ delay: 0.4 + i * 0.1, duration: 0.6 }}
+            className="absolute h-1.5 w-1.5 rounded-full bg-terracotta/70"
+            style={{ left: `${left}%`, top: `${top}%` }}
+          />
+        )
+      })}
+    </>
+  )
+}
+
 function PhilosophySection() {
   return (
     <section id="philosophy" className="relative py-24 md:py-32 bg-beige/60 overflow-hidden">
@@ -405,22 +434,8 @@ function PhilosophySection() {
               alt="SutraKriti mandala"
               className="absolute inset-6 md:inset-10 w-[calc(100%-3rem)] md:w-[calc(100%-5rem)] h-[calc(100%-3rem)] md:h-[calc(100%-5rem)] object-contain drop-shadow-[0_20px_40px_rgba(109,76,54,0.25)]"
             />
-            {/* Tiny sparkles orbiting */}
-            {Array.from({ length: 6 }).map((_, i) => {
-              const angle = (i / 6) * Math.PI * 2
-              const r = 46
-              const left = 50 + Math.cos(angle) * r
-              const top = 50 + Math.sin(angle) * r
-              return (
-                <motion.span
-                  key={i}
-                  initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
-                  transition={{ delay: 0.4 + i * 0.1, duration: 0.6 }}
-                  className="absolute h-1.5 w-1.5 rounded-full bg-terracotta/70"
-                  style={{ left: `${left}%`, top: `${top}%` }}
-                />
-              )
-            })}
+            {/* Tiny sparkles orbiting (client-only to avoid float-point hydration mismatch) */}
+            <PhilosophySparkles />
           </div>
           <div className="mt-6 text-center text-[11px] tracking-[0.3em] uppercase text-charcoal/50">— Every thread, intentional —</div>
         </motion.div>
@@ -496,14 +511,14 @@ function Collections({ products, onView }) {
           <a href="#catalogue" className="hidden md:inline-flex items-center gap-2 text-sm text-charcoal link-underline">Browse full catalogue <ArrowRight className="h-4 w-4" /></a>
         </div>
 
-        <div className="grid md:grid-cols-6 gap-5 md:gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-5 md:gap-6">
           {featured.map((p, i) => (
             <motion.button
               key={p.id}
               initial={{ opacity: 0, y: 40 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: '-80px' }}
               transition={{ duration: 0.7, delay: i * 0.06 }}
               onClick={() => onView(p)}
-              className={`luxury-card group relative overflow-hidden rounded-[1.75rem] bg-cream text-left ${i === 0 ? 'md:col-span-4 md:row-span-2 aspect-[16/13]' : 'md:col-span-2 aspect-square'}`}
+              className={`luxury-card group relative overflow-hidden rounded-[1.75rem] bg-cream text-left w-full aspect-square ${i === 0 ? 'sm:col-span-2 md:col-span-4 md:row-span-2 md:aspect-[16/13]' : 'md:col-span-2'}`}
             >
               <img src={p.image} alt={p.name} className="absolute inset-0 w-full h-full object-cover transition-transform duration-[1200ms] group-hover:scale-[1.08]" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />

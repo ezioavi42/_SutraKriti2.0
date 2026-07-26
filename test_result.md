@@ -462,15 +462,18 @@ backend:
 frontend:
   - task: "Luxury landing page (hero, story, collections, catalogue, why, personalisation, process, reviews, gallery, faq, newsletter, footer)"
     implemented: true
-    working: "NA"
+    working: false
     file: "app/page.js"
-    stuck_count: 0
+    stuck_count: 1
     priority: "high"
-    needs_retesting: false
+    needs_retesting: true
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Manually verified via screenshots — hero morphing word, palette, sections render correctly."
+      - working: false
+        agent: "testing"
+        comment: "CRITICAL: Products not rendering. /api/products returns 500 (MariaDB not installed/running - ECONNREFUSED 127.0.0.1:3306). Featured Collections and Catalogue sections show only headings, ZERO product cards. Hydration fix VERIFIED WORKING (no console errors). Mobile layout fix CANNOT BE VERIFIED until database is fixed. Tested desktop (1920×1080) and mobile (390×844) - same issue on both."
 
 metadata:
   created_by: "main_agent"
@@ -479,15 +482,100 @@ metadata:
   run_ui: false
 
 test_plan:
-  current_focus: []
-  stuck_tasks: []
+  current_focus:
+    - "Luxury landing page (hero, story, collections, catalogue, why, personalisation, process, reviews, gallery, faq, newsletter, footer)"
+  stuck_tasks:
+    - "Luxury landing page (hero, story, collections, catalogue, why, personalisation, process, reviews, gallery, faq, newsletter, footer)"
   test_all: false
   test_priority: "high_first"
 
 agent_communication:
+  - agent: "testing"
+    message: |
+      ❌ CRITICAL INFRASTRUCTURE FAILURE - TESTING BLOCKED
+      
+      Attempted to verify TWO bug fixes (hydration mismatch + mobile collections visibility).
+      
+      **RESULTS:**
+      ✅ Issue 1 (Hydration): VERIFIED FIXED
+         - Tested desktop (1920×1080) and mobile (390×844) viewports
+         - Performed multiple page loads and reloads
+         - ZERO hydration errors in console
+         - No "server rendered HTML didn't match" warnings
+         - No "yarn-particle" style mismatches
+         - YarnParticles and PhilosophySparkles client-only rendering working correctly
+      
+      ❌ Issue 2 (Mobile Collections): CANNOT VERIFY - DATABASE DOWN
+         - /api/products returns HTTP 500 (Internal Server Error)
+         - Console shows: "Failed to load resource: the server responded with a status of 500"
+         - Backend logs show: "Error: connect ECONNREFUSED 127.0.0.1:3306"
+         - Root cause: MariaDB is NOT INSTALLED or NOT RUNNING
+         - Supervisor status: `mariadb FATAL can't find command '/usr/sbin/mariadbd'`
+         - Result: ZERO products render in Featured Collections or Catalogue sections
+         - Only section headings visible, no product cards at all
+      
+      **DIAGNOSIS:**
+      The backend was migrated to MySQL/MariaDB in previous rounds (per test_result.md history),
+      but MariaDB is not currently installed on the system. The backend code calls initSchema()
+      on every API request, which tries to connect to MySQL on 127.0.0.1:3306 and fails with
+      ECONNREFUSED, causing all /api/products requests to return 500.
+      
+      MongoDB IS running (supervisor shows RUNNING), but the backend code is configured for MySQL.
+      
+      **REQUIRED ACTION:**
+      1. Install and start MariaDB/MySQL, OR
+      2. Revert backend to use MongoDB (which is running), OR
+      3. Fix the database connection configuration
+      
+      Cannot complete mobile layout verification until products API is functional.
+      
+      Screenshots captured showing empty product sections at:
+      - .screenshots/desktop-collections.png
+      - .screenshots/mobile-collections.png
+      - .screenshots/mobile-catalogue.png
+  
   - agent: "main"
     message: |
-      ROUND 4 delta — please re-test the following changes:
+      BUG FIX — Please verify TWO reported issues have been resolved.
+
+      Base URL for testing: NEXT_PUBLIC_BASE_URL from /app/.env
+
+      ISSUE 1: Hydration mismatch console error (React "server rendered HTML didn't match client")
+        Root cause was:
+          a) `YarnParticles` used Math.random() inside useMemo which produced different values on
+             server vs client (visible in the huge diff in the report — width/height/left/top all
+             mismatched).
+          b) Philosophy section decorative sparkles used Math.cos/sin without rounding, producing
+             floating-point drift (e.g. left: "27%" vs "27.000000000000007%").
+        Fix:
+          - Both YarnParticles and PhilosophySparkles are now client-only components: they render
+            nothing during SSR (return null) and populate their items inside a useEffect. This
+            guarantees the SSR HTML has no random/floating-point values, so there is nothing to
+            mismatch on hydration.
+          - Sparkles positions are additionally rounded via .toFixed(4).
+        Please verify by loading the storefront home page (both desktop 1920x1080 AND mobile 390x844)
+        with the browser console open and confirm there are ZERO hydration warnings and ZERO
+        "server rendered HTML didn't match" errors. Perform a couple of full reloads.
+
+      ISSUE 2: Featured Collections invisible on mobile viewports
+        Root cause: the featured-collections grid was `grid md:grid-cols-6` with per-item classes
+        `md:col-span-4 ... aspect-[16/13]` (or `md:col-span-2 aspect-square`) — the aspect ratios
+        were only applied at md+ breakpoints, so on mobile the buttons had no height. Compounded
+        with the hydration bailout, the section appeared empty on phones.
+        Fix:
+          - Grid is now `grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-5 md:gap-6`.
+          - Buttons carry `w-full aspect-square` as their mobile default; only the hero-card
+            promotes to `sm:col-span-2 md:col-span-4 md:row-span-2 md:aspect-[16/13]`.
+        Please verify by loading the site at mobile viewport (390x844 iPhone-like) and confirming
+        that the Featured Collections section shows all 6 cards (Terracotta Tote, Ivory Market
+        Tote, Golden Wedding Potli, Everlasting White Blossom Bouquet, Wildflower Posy, Bouquet
+        Blanket) each with a visible product image, category, name and price. Also confirm the
+        Full Catalogue section below shows 8 product tiles in a 2-column grid on mobile.
+
+      Do NOT test other flows. This is specifically a bug-fix verification for these two issues.
+      IMPORTANT: `/api/products` is DB-backed but the products list itself is static (from
+      lib/products.js). MariaDB is running under supervisor; if a card fails to appear because
+      the products fetch failed, that would indicate the DB is not running — check /api/health.
 
       1) POST /api/custom-order now REQUIRES a valid email (previously optional).
          - Missing email → 400 { error:'email required' }
