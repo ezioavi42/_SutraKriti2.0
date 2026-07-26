@@ -109,6 +109,21 @@ user_problem_statement: |
   modern sans typography, Framer Motion animations.
 
 backend:
+  - task: "GET /api/health"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Health check endpoint returns ok:true, db:true (MySQL connection), mail:false (SMTP unconfigured)."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED (MySQL): Returns 200 with { ok:true, db:true, mail:false }. MySQL connection verified, SMTP correctly reported as unconfigured."
+
   - task: "GET /api/products list"
     implemented: true
     working: true
@@ -123,6 +138,9 @@ backend:
       - working: true
         agent: "testing"
         comment: "✅ TESTED: Returns 200 with { products: [...] } containing 8 products. All products have required fields: id, name, category, price, image, description, material, dimensions, care, delivery. Sample: Terracotta Tote Bag (p-tote-terracotta)."
+      - working: true
+        agent: "testing"
+        comment: "✅ RE-TESTED (MySQL): Still working correctly after MySQL migration. Returns 200 with 8 products, all required fields present."
 
   - task: "GET /api/products/:id single product"
     implemented: true
@@ -138,6 +156,9 @@ backend:
       - working: true
         agent: "testing"
         comment: "✅ TESTED: Valid ID (p-tote-terracotta) returns 200 with { product: {...} }. Invalid ID (unknown-product-id) returns 404 with { error: 'not found' }. Both paths working correctly."
+      - working: true
+        agent: "testing"
+        comment: "✅ RE-TESTED (MySQL): Still working correctly after MySQL migration. Valid ID returns 200, invalid ID returns 404."
 
   - task: "POST /api/custom-order (custom enquiry)"
     implemented: true
@@ -153,6 +174,12 @@ backend:
       - working: true
         agent: "testing"
         comment: "✅ TESTED: Valid request with name/contact returns 200 { ok: true, id: <uuid> }. Missing required fields returns 400 { error: 'name and contact required' }. Record successfully inserted and verified in MongoDB custom_orders collection."
+      - working: "NA"
+        agent: "main"
+        comment: "Migrated to MySQL. Now stores in MySQL custom_orders table. Returns { ok:true, id:uuid, emailStatus:'skipped' } (SMTP unconfigured)."
+      - working: true
+        agent: "testing"
+        comment: "✅ RE-TESTED (MySQL): Valid request returns 200 { ok:true, id:<uuid>, emailStatus:'skipped' }. Missing fields returns 400. Data persists in MySQL custom_orders table. emailStatus:'skipped' is CORRECT (SMTP intentionally unconfigured)."
 
   - task: "POST /api/contact"
     implemented: true
@@ -168,6 +195,9 @@ backend:
       - working: true
         agent: "testing"
         comment: "✅ TESTED: Valid request with name/message returns 200 { ok: true }. Missing required fields returns 400 { error: 'name and message required' }. Record successfully inserted and verified in MongoDB contacts collection."
+      - working: true
+        agent: "testing"
+        comment: "✅ RE-TESTED (MySQL): Valid request returns 200 { ok:true, id:<uuid> }. Missing fields returns 400. Data persists in MySQL contacts table."
 
   - task: "POST /api/newsletter (subscribe)"
     implemented: true
@@ -183,6 +213,9 @@ backend:
       - working: true
         agent: "testing"
         comment: "✅ TESTED: Valid request with email returns 200 { ok: true }. Missing email returns 400 { error: 'email required' }. Upsert operation successfully verified in MongoDB newsletter collection."
+      - working: true
+        agent: "testing"
+        comment: "✅ RE-TESTED (MySQL): Valid email returns 200 { ok:true }. Missing email returns 400. Upsert semantics working correctly (duplicate email does not error). Data persists in MySQL newsletter table."
 
   - task: "POST /api/razorpay/order (create order, gated on env keys)"
     implemented: true
@@ -201,6 +234,9 @@ backend:
       - working: true
         agent: "testing"
         comment: "✅ TESTED: With valid productId (p-tote-terracotta), returns 503 { error: 'payment_unconfigured', whatsappNumber: '917777932385', message: '...' } as expected (RAZORPAY_KEY_ID/SECRET are empty in .env). With invalid productId, returns 404 { error: 'product not found' }. This is correct MVP behavior for fallback to WhatsApp ordering."
+      - working: true
+        agent: "testing"
+        comment: "✅ RE-TESTED (MySQL): Valid productId returns 503 { error:'payment_unconfigured', whatsappNumber:'917777932385' } as EXPECTED (Razorpay gated via NEXT_PUBLIC_BUY_NOW_ENABLED=false and missing keys). Invalid productId returns 404. This is CORRECT MVP behavior."
 
   - task: "POST /api/razorpay/verify (signature verification)"
     implemented: true
@@ -218,6 +254,24 @@ backend:
       - working: true
         agent: "testing"
         comment: "✅ TESTED: Missing required fields (razorpay_order_id, razorpay_payment_id, razorpay_signature) returns 400 { error: 'missing fields' }. Field validation working correctly. Full signature verification requires live Razorpay keys and cannot be tested in MVP."
+      - working: true
+        agent: "testing"
+        comment: "✅ RE-TESTED (MySQL): Missing required fields returns 400 { error:'missing fields' }. Field validation working correctly. Updates MySQL payments table when keys are configured."
+
+  - task: "POST /api/upload (file upload with token auth)"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Handles multipart/form-data file upload. Requires header x-upload-token: sutrakriti-dev-upload-token. Accepts image/jpeg, image/png, image/webp, image/avif, image/gif. Max 8MB. Saves to public/products/ and records in MySQL uploads table."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED (MySQL): Valid PNG upload with correct token returns 200 { ok:true, id:<uuid>, filename, url, size, mime }. Without token returns 401 { error:'unauthorised' }. Wrong mime type (text/plain) returns 415 { error:'unsupported mime type...' }. File saved to disk and record persisted in MySQL uploads table."
 
   - task: "GET /api/admin/custom-orders"
     implemented: true
@@ -233,6 +287,39 @@ backend:
       - working: true
         agent: "testing"
         comment: "✅ TESTED: Returns 200 { orders: [...] } with array of custom orders sorted by createdAt descending. Successfully retrieved orders from MongoDB. No authentication required in MVP as specified."
+      - working: true
+        agent: "testing"
+        comment: "✅ RE-TESTED (MySQL): Returns 200 { orders:[...] } with custom orders from MySQL custom_orders table, sorted by created_at DESC, limit 200. Successfully retrieved 2 orders."
+
+  - task: "GET /api/admin/uploads"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "low"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Returns most recent 200 uploads (no auth in MVP). Shows filename, url, mime, size_bytes, created_at."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED (MySQL): Returns 200 { uploads:[...] } with uploads from MySQL uploads table, sorted by created_at DESC, limit 200. Successfully retrieved 2 uploads."
+
+  - task: "GET /api/admin/newsletter"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "low"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Returns most recent 500 newsletter subscribers (no auth in MVP). Shows email, subscribed_at."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED (MySQL): Returns 200 { subscribers:[...] } with subscribers from MySQL newsletter table, sorted by subscribed_at DESC, limit 500. Successfully retrieved 2 subscribers."
 
 frontend:
   - task: "Luxury landing page (hero, story, collections, catalogue, why, personalisation, process, reviews, gallery, faq, newsletter, footer)"
@@ -250,7 +337,7 @@ frontend:
 metadata:
   created_by: "main_agent"
   version: "1.0"
-  test_sequence: 1
+  test_sequence: 2
   run_ui: false
 
 test_plan:
@@ -262,20 +349,38 @@ test_plan:
 agent_communication:
   - agent: "main"
     message: |
-      Backend endpoints ready. Please test:
-        - GET  /api/products  → should return { products: [...] } with 8 items.
-        - GET  /api/products/p-tote-terracotta → { product: {...} }; unknown id → 404.
-        - POST /api/custom-order with { name, contact, email?, productType?, ... } → 200 { ok:true, id }.
-              Missing name/contact → 400.
-        - POST /api/newsletter with { email } → 200 { ok:true }. Missing email → 400.
-        - POST /api/contact with { name, message } → 200 { ok:true }. Missing → 400.
-        - POST /api/razorpay/order with { productId } → because RAZORPAY_KEY_ID/SECRET are
-              intentionally empty in .env, this MUST return HTTP 503 with
-              { error: 'payment_unconfigured', whatsappNumber }. This is expected MVP behaviour
-              (fallback to WhatsApp) — do NOT flag as failure.
-        - POST /api/razorpay/verify — cannot be fully tested without live signature; verify that
-              missing fields → 400.
-      MongoDB is used via MONGO_URL + DB_NAME='sutrakriti'.
+      MAJOR REFACTOR (round 2). Backend has been migrated MongoDB -> MySQL and gained new endpoints.
+      Please test the following against the SutraKriti API (base = NEXT_PUBLIC_BASE_URL + /api).
+
+      Database: MySQL/MariaDB on 127.0.0.1:3306, DB='sutrakriti', user='sutrakriti'.
+      Schema is auto-created on first request (see lib/db.js). Tables:
+        custom_orders, contacts, newsletter, payments, uploads.
+
+      Endpoints:
+        - GET  /api/health → 200 { ok:true, db:true, mail:false (SMTP not yet configured) }
+        - GET  /api/products → 200 { products:[8 items] }
+        - GET  /api/products/p-tote-terracotta → 200 { product:{...} }; unknown → 404
+        - POST /api/custom-order with valid body → 200 { ok:true, id:uuid, emailStatus:'skipped' }
+              (skipped because SMTP not configured — this is the correct current behavior).
+              Missing name/contact → 400. Verify row persists via /api/admin/custom-orders.
+        - POST /api/contact { name, message } → 200 { ok:true }; missing → 400
+        - POST /api/newsletter { email } → 200 { ok:true }; missing → 400; upsert semantics
+              (same email twice should NOT error out).
+        - POST /api/razorpay/order { productId:'p-tote-terracotta' } → 503
+              { error:'payment_unconfigured', whatsappNumber } — EXPECTED (Buy Now disabled).
+        - POST /api/razorpay/verify with missing fields → 400
+        - POST /api/upload  (multipart/form-data, single 'file' field, header
+              x-upload-token: sutrakriti-dev-upload-token) with a small PNG/JPG:
+              → 200 { ok:true, url:'/products/<file>', ... }
+              Without token or wrong token → 401.
+              With mime text/plain → 415.
+              Verify row persists via /api/admin/uploads.
+        - GET /api/admin/custom-orders → 200 { orders:[...] }
+        - GET /api/admin/uploads → 200 { uploads:[...] }
+        - GET /api/admin/newsletter → 200 { subscribers:[...] }
+
+      DO NOT flag the 503 on /api/razorpay/order as a failure. That is the intentional MVP gate.
+      DO NOT flag emailStatus:'skipped' as a failure — SMTP is unconfigured in dev.
   
   - agent: "testing"
     message: |
@@ -295,3 +400,33 @@ agent_communication:
       All endpoints tested against https://premium-threads-332.preview.emergentagent.com/api
       MongoDB integration verified for all data persistence operations.
       No critical issues found. Backend is production-ready for MVP.
+
+  - agent: "testing"
+    message: |
+      ✅ ALL BACKEND TESTS PASSED AFTER MySQL MIGRATION (12/12 - 100%)
+      
+      Comprehensive re-testing completed after MongoDB → MySQL migration:
+      
+      1. ✅ GET /api/health - Returns ok:true, db:true (MySQL), mail:false (SMTP unconfigured)
+      2. ✅ GET /api/products - Returns 8 products (static catalogue, no DB dependency)
+      3. ✅ GET /api/products/:id - Valid ID returns 200, invalid returns 404
+      4. ✅ POST /api/custom-order - Creates order in MySQL, returns emailStatus:'skipped' (CORRECT)
+      5. ✅ POST /api/contact - Stores contact in MySQL contacts table
+      6. ✅ POST /api/newsletter - Upserts email in MySQL newsletter table (duplicate handling works)
+      7. ✅ POST /api/razorpay/order - Returns 503 payment_unconfigured (EXPECTED, gated)
+      8. ✅ POST /api/razorpay/verify - Field validation working (400 for missing fields)
+      9. ✅ POST /api/upload - Token auth works (200 with token, 401 without, 415 wrong mime)
+      10. ✅ GET /api/admin/custom-orders - Returns orders from MySQL (2 orders retrieved)
+      11. ✅ GET /api/admin/uploads - Returns uploads from MySQL (2 uploads retrieved)
+      12. ✅ GET /api/admin/newsletter - Returns subscribers from MySQL (2 subscribers retrieved)
+      
+      All endpoints tested against https://premium-threads-332.preview.emergentagent.com/api
+      MySQL integration verified for all data persistence operations.
+      Schema auto-creation working correctly (custom_orders, contacts, newsletter, payments, uploads tables).
+      
+      IMPORTANT NOTES:
+      - emailStatus:'skipped' is CORRECT behavior (SMTP intentionally unconfigured in dev)
+      - 503 payment_unconfigured is CORRECT behavior (Razorpay gated via NEXT_PUBLIC_BUY_NOW_ENABLED=false)
+      - Upload token authentication working correctly (x-upload-token: sutrakriti-dev-upload-token)
+      
+      No critical issues found. Backend is production-ready for MVP after MySQL migration.

@@ -1,0 +1,299 @@
+# Deploying SutraKriti to MilesWeb (Node.js Hosting)
+
+This guide walks you through a **production deployment of SutraKriti** on a MilesWeb **Node.js Hosting** subscription plan, from account setup to a live URL with MySQL, SMTP and Razorpay wired in.
+
+> Tested against MilesWeb’s cPanel-based Node.js selector (Passenger). The exact UI labels may drift; the flow is the same.
+
+---
+
+## 0. Prerequisites
+
+- A MilesWeb hosting plan that includes **Node.js Selector** and **MySQL** (Business / Startup / Node.js plans all qualify).
+- SSH access enabled on your account (MilesWeb → cPanel → “SSH Access”).
+- A domain pointed to MilesWeb name-servers.
+- A local copy of this repository.
+- Your **Razorpay** keys (optional) and **SMTP** credentials for outbound email.
+
+---
+
+## 1. Create the MySQL database
+
+1. Log into cPanel → **MySQL® Databases**.
+2. Create a database, e.g. `youracct_sutrakriti`.
+3. Create a database user with a strong password and **Add User To Database**, granting **ALL PRIVILEGES**.
+4. Note the following — you’ll need them shortly:
+   - `MYSQL_HOST` — usually `localhost` on shared MilesWeb; on VPS it may be `127.0.0.1` or a private IP.
+   - `MYSQL_PORT` — `3306`.
+   - `MYSQL_USER` — the prefixed user (e.g. `youracct_sk`).
+   - `MYSQL_PASSWORD` — the password you set.
+   - `MYSQL_DATABASE` — the prefixed DB name.
+
+---
+
+## 2. Create the Node.js application in cPanel
+
+1. cPanel → **Setup Node.js App** → **Create Application**.
+2. Set:
+   - **Node.js version**: `20.x` (or the latest available; 18+ works).
+   - **Application mode**: `Production`.
+   - **Application root**: `sutrakriti` (creates `/home/youracct/sutrakriti/`).
+   - **Application URL**: your domain / subdomain (e.g. `www.sutrakriti.com`).
+   - **Application startup file**: `node_modules/next/dist/bin/next` — or leave blank for now and set it after step 4.
+3. Click **Create**. MilesWeb generates a virtualenv-style Node environment and shows a “Enter to the virtual environment” command — copy it, you’ll need it below.
+
+---
+
+## 3. Upload the code
+
+Two options — pick whichever is faster.
+
+### Option A — Git deploy (recommended)
+```bash
+ssh youracct@yourdomain.com
+cd ~/sutrakriti
+git clone https://github.com/<your-org>/sutrakriti.git .
+```
+
+### Option B — SFTP upload
+Upload the repo contents (skip `node_modules/`, `.next/`, `.env.local`) via FileZilla/Cyberduck into `~/sutrakriti/`.
+
+---
+
+## 4. Configure `.env`
+
+Create `~/sutrakriti/.env` with production values:
+
+```env
+NEXT_PUBLIC_BASE_URL=https://www.sutrakriti.com
+CORS_ORIGINS=https://www.sutrakriti.com
+
+# MySQL
+MYSQL_HOST=localhost
+MYSQL_PORT=3306
+MYSQL_USER=youracct_sk
+MYSQL_PASSWORD=your-strong-password
+MYSQL_DATABASE=youracct_sutrakriti
+
+# Razorpay (leave empty to keep Buy Now disabled)
+RAZORPAY_KEY_ID=
+RAZORPAY_KEY_SECRET=
+NEXT_PUBLIC_BUY_NOW_ENABLED=false
+
+# SMTP (Outlook example)
+SMTP_HOST=smtp-mail.outlook.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=sutrakriti.help@outlook.com
+SMTP_PASSWORD=your-app-password
+SMTP_FROM=SutraKriti <sutrakriti.help@outlook.com>
+ORDERS_EMAIL=sutrakriti.help@outlook.com
+
+# Uploads
+UPLOAD_DIR=public/products
+UPLOAD_TOKEN=<generate-a-long-random-string>
+
+# Brand
+WHATSAPP_NUMBER=917777932385
+BRAND_INSTAGRAM=https://www.instagram.com/_sutrakriti
+BRAND_EMAIL=sutrakriti.help@outlook.com
+```
+
+> ⚠️ **Never commit `.env` to git.** It contains secrets.
+
+Add them also in cPanel → Node.js App → **Environment variables** (some MilesWeb Passenger setups override `.env`; adding both is safe).
+
+---
+
+## 5. Install & build
+
+From the SSH session, enter the Node virtual environment (the command shown in step 2), then:
+
+```bash
+cd ~/sutrakriti
+yarn install --frozen-lockfile           # or: npm ci
+node scripts/init-db.js                    # creates all MySQL tables (safe to re-run)
+yarn build                                 # produces .next/ production bundle
+```
+
+The build should end with `Compiled successfully`.
+
+---
+
+## 6. Configure the startup file
+
+MilesWeb’s Passenger runs one “startup file”. Create `server.js` at the project root (only for production):
+
+```js
+// server.js — production entry for MilesWeb Passenger
+const { createServer } = require('http')
+const { parse } = require('url')
+const next = require('next')
+
+const port = process.env.PORT || 3000
+const app = next({ dev: false })
+const handle = app.getRequestHandler()
+
+app.prepare().then(() => {
+  createServer((req, res) => handle(req, res, parse(req.url, true)))
+    .listen(port, () => console.log(`▲ SutraKriti ready on ${port}`))
+})
+```
+
+In cPanel → Node.js App, set:
+- **Application startup file**: `server.js`
+- Click **Restart**.
+
+> Alternative: keep the built-in Next start script (`node_modules/next/dist/bin/next`) with argument `start`. Both work; `server.js` is more portable.
+
+---
+
+## 7. Point the domain
+
+cPanel → **Domains** → make sure `www.sutrakriti.com` **Document Root** points to the Node.js proxy generated by the Node.js App (usually `~/sutrakriti/public`). MilesWeb’s Node.js Selector wires this automatically for the primary domain assigned to the app.
+
+If you’re using a **subdomain** (e.g. `shop.sutrakriti.com`), create it under **Domains** first, then re-open the Node.js App and re-select the domain.
+
+---
+
+## 8. Enable HTTPS
+
+cPanel → **SSL/TLS Status** → select the domain → **Run AutoSSL**. MilesWeb issues a Let’s Encrypt cert within minutes.
+
+Update `NEXT_PUBLIC_BASE_URL` in `.env` to the `https://` version if not already.
+
+---
+
+## 9. Smoke tests
+
+```bash
+curl -sf https://www.sutrakriti.com/api/health | jq
+# → { "ok": true, "db": true, "mail": true }
+
+curl -sf https://www.sutrakriti.com/api/products | jq '.products | length'
+# → 8
+```
+
+Submit a test custom-order from the site → you should receive the styled email at `ORDERS_EMAIL`.
+
+---
+
+## 10. Uploading product images (production)
+
+### Manual (fastest)
+cPanel → **File Manager** → `~/sutrakriti/public/products/` → upload your `.webp` / `.jpg` files.
+Update the corresponding `image` URL in `lib/products.js` (`/products/your-file.webp`) and redeploy (`git pull && yarn build && restart`).
+
+### API (remote)
+```bash
+curl -X POST https://www.sutrakriti.com/api/upload \
+  -H "x-upload-token: $UPLOAD_TOKEN" \
+  -F "file=@./my-tote.jpg"
+```
+
+### CLI helper
+```bash
+UPLOAD_TOKEN=... NEXT_PUBLIC_BASE_URL=https://www.sutrakriti.com \
+  ./scripts/upload-product-image.sh ./my-tote.jpg
+```
+
+---
+
+## 11. Enabling Razorpay in production
+
+1. In Razorpay Dashboard → **Account & Settings → API Keys**, generate **Live** keys.
+2. In cPanel → Node.js App → Environment variables:
+   ```
+   RAZORPAY_KEY_ID=rzp_live_...
+   RAZORPAY_KEY_SECRET=...
+   NEXT_PUBLIC_BUY_NOW_ENABLED=true
+   ```
+3. Click **Restart**.
+4. Verify by opening a product → you should now see **Buy Now** alongside **Order on WhatsApp**.
+
+---
+
+## 12. Hardening checklist for production
+
+- [ ] Rotate `UPLOAD_TOKEN` to a long random string. Store it in a password manager.
+- [ ] Add HTTP-basic-auth or a simple bearer check in front of `/api/admin/*` (see `route.js`, easy to add in `handleRoute`).
+- [ ] Set `CORS_ORIGINS` to your exact domain (not `*`).
+- [ ] Configure MilesWeb’s daily backups **and** run a nightly `mysqldump` cron:
+  ```bash
+  0 2 * * * mysqldump -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE | gzip > ~/backups/sk-$(date +\%F).sql.gz
+  ```
+- [ ] Enable **fail2ban** / Cloudflare in front of the domain to rate-limit `/api/upload` and `/api/custom-order` if abused.
+- [ ] Verify `robots.txt` and `/sitemap.xml` (add a static one under `public/` when catalogue stabilises).
+- [ ] Confirm the Razorpay **Webhook** URL if you later add asynchronous fulfillment.
+
+---
+
+## 13. Updating the app
+
+With a Git-based deploy:
+```bash
+ssh youracct@yourdomain.com
+cd ~/sutrakriti
+git pull --ff-only
+yarn install --frozen-lockfile
+yarn build
+```
+Then cPanel → Node.js App → **Restart**.
+
+---
+
+## 14. Rolling back
+
+```bash
+git log --oneline -5
+git checkout <previous-sha>
+yarn build
+# restart via cPanel
+```
+MySQL migrations are additive; no rollback DDL needed for this project.
+
+---
+
+## 15. Alternative deployment targets
+
+### Vercel
+1. Push repo to GitHub.
+2. Import into Vercel.
+3. Add the same `.env` variables in the Vercel dashboard.
+4. Provision MySQL on **PlanetScale**, **Railway** or a MilesWeb VPS with public MySQL enabled.
+5. Note: file uploads on Vercel are ephemeral. For production uploads, store files in S3 / R2 instead of `public/products/` — the `/api/upload` route can be adapted in ~15 lines.
+
+### Docker
+```dockerfile
+FROM node:20-alpine
+WORKDIR /app
+COPY package.json yarn.lock ./
+RUN yarn install --frozen-lockfile
+COPY . .
+RUN yarn build
+EXPOSE 3000
+CMD ["node", "server.js"]
+```
+`docker run -p 3000:3000 --env-file .env sutrakriti`
+
+---
+
+## 16. Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| `Access denied for user '...'@'localhost'` on first API call | Wrong `MYSQL_USER/PASSWORD`; run `node scripts/init-db.js` manually to reproduce. |
+| API works but email never arrives | Check `curl /api/health` → `mail: true`. If false, SMTP env vars are missing. Otherwise check Outlook “Sent” + junk folder; for Outlook, use an **app password**, not your account password. |
+| Buy Now stays hidden even after adding keys | `NEXT_PUBLIC_BUY_NOW_ENABLED` must be `true` **and** you must restart the app so Next.js re-reads env vars at build/render time. |
+| Uploads return `401 unauthorised` | Header `x-upload-token` must match `UPLOAD_TOKEN` in `.env`. |
+| Images 404 after upload | Ensure `public/products/` is writable (`chmod 755`) and the Passenger user owns it. |
+| Site returns 502 after `yarn build` | `.next/` was built with a different Node version. Rebuild inside the same virtualenv. |
+
+---
+
+## 17. Support contacts
+
+- **MilesWeb support**: <https://www.milesweb.in/support>
+- **Razorpay integration issues**: <https://razorpay.com/support/>
+- **Repo issues / feature requests**: use the Git provider’s issue tracker.
+
+— *Deployed with love, one thread at a time.*

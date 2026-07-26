@@ -381,10 +381,10 @@ function StorySection() {
           </motion.div>
           <div className="grid grid-cols-2 gap-6">
             <motion.div initial={{ opacity: 0, y: 40 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.8, delay: 0.1 }} className="rounded-[1.5rem] overflow-hidden aspect-[3/4]">
-              <img src="https://images.unsplash.com/photo-1560347964-838d2f63cdc0" alt="Yarn and craft" className="w-full h-full object-cover" />
+              <img src="https://images.unsplash.com/photo-1648005539099-709d5be525fb?w=900&q=85" alt="Balls of yarn with wooden crochet hook resting on soft blanket" className="w-full h-full object-cover" />
             </motion.div>
             <motion.div initial={{ opacity: 0, y: 40 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.8, delay: 0.2 }} className="rounded-[1.5rem] overflow-hidden aspect-[3/4] mt-8">
-              <img src="https://images.unsplash.com/photo-1510284876186-b1a84b94418f" alt="Beautifully wrapped gift" className="w-full h-full object-cover" />
+              <img src="https://images.pexels.com/photos/37540169/pexels-photo-37540169.jpeg?w=900" alt="Delicate crochet piece with wildflowers on floral fabric" className="w-full h-full object-cover" />
             </motion.div>
           </div>
         </div>
@@ -530,26 +530,28 @@ function Personalisation({ onOpenCustom }) {
     <section className="relative py-24 md:py-32 overflow-hidden">
       <div className="absolute inset-0">
         <img src="https://images.unsplash.com/photo-1571434976902-a6e3e1eb0d51?w=1600&q=85" alt="Handcrafted crochet" className="w-full h-full object-cover" />
-        <div className="absolute inset-0 bg-[color:var(--sk-charcoal)]/70" />
+        <div className="absolute inset-0" style={{
+          background: 'linear-gradient(115deg, rgba(247,241,229,0.96) 0%, rgba(247,241,229,0.92) 45%, rgba(233,221,199,0.78) 100%)'
+        }} />
       </div>
-      <div className="container relative z-10 text-cream">
+      <div className="container relative z-10 text-charcoal">
         <div className="max-w-3xl">
-          <span className="text-[11px] tracking-[0.3em] uppercase text-gold">Personalisation</span>
-          <h2 className="mt-3 font-serif text-4xl md:text-6xl leading-[1.05] text-white">Make it yours.<br /><span className="italic">Made only for you.</span></h2>
-          <p className="mt-5 text-white/80 max-w-xl leading-relaxed">
+          <span className="text-[11px] tracking-[0.3em] uppercase text-terracotta">Personalisation</span>
+          <h2 className="mt-3 font-serif text-4xl md:text-6xl leading-[1.05] text-charcoal">Make it yours.<br /><span className="italic text-brown">Made only for you.</span></h2>
+          <p className="mt-5 text-charcoal/75 max-w-xl leading-relaxed">
             Choose your colours, dimensions, and story. We create wedding gifts, baby heirlooms, corporate keepsakes and everything in between — one thread at a time.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Button onClick={onOpenCustom} size="lg" className="btn-luxury rounded-full bg-terracotta hover:bg-[color:var(--sk-terracotta-dark)] text-white px-7 h-12">
               Start a Custom Order <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
-            <Button asChild variant="outline" size="lg" className="rounded-full h-12 border-white/40 bg-transparent text-white hover:bg-white hover:text-charcoal">
+            <Button asChild variant="outline" size="lg" className="rounded-full h-12 border-charcoal/25 bg-transparent text-charcoal hover:bg-charcoal hover:text-cream">
               <a target="_blank" rel="noreferrer" href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent('Hi SutraKriti, I would like a custom crochet piece.')}`}>Chat on WhatsApp <MessageCircle className="ml-2 h-4 w-4" /></a>
             </Button>
           </div>
-          <div className="mt-10 grid grid-cols-2 md:grid-cols-4 gap-6 max-w-2xl text-white/85">
+          <div className="mt-10 grid grid-cols-2 md:grid-cols-4 gap-6 max-w-2xl text-charcoal/80">
             {['Wedding Gifts', 'Baby Gifts', 'Corporate Gifts', 'Festival Gifts'].map(x => (
-              <div key={x} className="border-t border-white/20 pt-3 text-sm tracking-wider uppercase">{x}</div>
+              <div key={x} className="border-t border-charcoal/20 pt-3 text-sm tracking-wider uppercase">{x}</div>
             ))}
           </div>
         </div>
@@ -788,6 +790,7 @@ function Info({ label, value }) {
 function ProductModal({ product, open, onClose, onCustom }) {
   const [busy, setBusy] = useState(false)
   if (!product) return null
+  const buyEnabled = (process.env.NEXT_PUBLIC_BUY_NOW_ENABLED || 'false').toLowerCase() === 'true'
   const buyNow = async () => {
     setBusy(true)
     try {
@@ -850,13 +853,20 @@ function ProductModal({ product, open, onClose, onCustom }) {
               </div>
             ) : null}
             <div className="mt-7 flex flex-col sm:flex-row gap-2">
-              <Button onClick={buyNow} disabled={busy} className="btn-luxury bg-terracotta hover:bg-[color:var(--sk-terracotta-dark)] text-white rounded-full h-11 flex-1">
-                {busy ? 'Opening…' : 'Buy Now'} <ShoppingBag className="ml-2 h-4 w-4" />
-              </Button>
-              <Button onClick={orderWhats} variant="outline" className="rounded-full h-11 flex-1 border-charcoal/20">
+              {buyEnabled && (
+                <Button onClick={buyNow} disabled={busy} className="btn-luxury bg-terracotta hover:bg-[color:var(--sk-terracotta-dark)] text-white rounded-full h-11 flex-1">
+                  {busy ? 'Opening…' : 'Buy Now'} <ShoppingBag className="ml-2 h-4 w-4" />
+                </Button>
+              )}
+              <Button onClick={orderWhats} className={`rounded-full h-11 flex-1 ${buyEnabled ? 'bg-transparent border border-charcoal/20 text-charcoal hover:bg-beige' : 'btn-luxury bg-terracotta hover:bg-[color:var(--sk-terracotta-dark)] text-white'}`}>
                 Order on WhatsApp <MessageCircle className="ml-2 h-4 w-4" />
               </Button>
             </div>
+            {!buyEnabled && (
+              <div className="mt-2 text-[11px] text-charcoal/50 tracking-wide">
+                Online checkout coming soon. For now, orders are placed via WhatsApp.
+              </div>
+            )}
             <button onClick={() => { onClose(); onCustom() }} className="mt-4 text-sm text-charcoal/70 link-underline">Want it in a different colour or size? Request a custom piece →</button>
           </div>
         </div>
