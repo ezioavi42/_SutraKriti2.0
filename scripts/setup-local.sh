@@ -52,7 +52,17 @@ ok "MariaDB is running."
 
 # --- 3. Database + user -----------------------------------------------
 log "Creating database and user …"
-sudo mysql -uroot <<'SQL'
+
+# On macOS with Homebrew, MariaDB runs under your user account and does NOT
+# need sudo. On Linux the default install uses unix_socket auth for root,
+# so we do need sudo there.
+if [[ "$OS" == "Darwin" ]]; then
+  MYSQL_CMD="mysql -uroot"
+else
+  MYSQL_CMD="sudo mysql -uroot"
+fi
+
+$MYSQL_CMD <<'SQL'
 CREATE DATABASE IF NOT EXISTS sutrakriti CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE USER IF NOT EXISTS 'sutrakriti'@'localhost' IDENTIFIED BY 'sutrakriti_dev_pw';
 CREATE USER IF NOT EXISTS 'sutrakriti'@'127.0.0.1' IDENTIFIED BY 'sutrakriti_dev_pw';

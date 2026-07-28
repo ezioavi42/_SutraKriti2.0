@@ -74,6 +74,20 @@ What it does (idempotent — safe to re-run):
 ## 4. Manual setup (if you prefer)
 
 ### 4.1 Create the database & user
+
+**macOS (Homebrew)** — no `sudo` needed (MariaDB runs under your user):
+```bash
+mysql -uroot <<SQL
+CREATE DATABASE IF NOT EXISTS sutrakriti
+  CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER IF NOT EXISTS 'sutrakriti'@'localhost'
+  IDENTIFIED BY 'sutrakriti_dev_pw';
+GRANT ALL PRIVILEGES ON sutrakriti.* TO 'sutrakriti'@'localhost';
+FLUSH PRIVILEGES;
+SQL
+```
+
+**Linux (Debian/Ubuntu)** — the default install uses `unix_socket` auth for root, so use `sudo`:
 ```bash
 sudo mysql -uroot <<SQL
 CREATE DATABASE IF NOT EXISTS sutrakriti
@@ -216,8 +230,9 @@ sudo mysql -usutrakriti -psutrakriti_dev_pw sutrakriti
 
 | Symptom | Fix |
 |---|---|
+| `Password:` prompt from `setup-local.sh` on macOS asks a password and rejects it | That prompt is from `sudo` (asking your **macOS login password**), not MariaDB. On macOS, MariaDB installed via Homebrew doesn't need `sudo`. Update `scripts/setup-local.sh` to the latest version (it now auto-detects macOS) or just type your Mac login password once. |
 | `Access denied for user 'root'@'localhost'` | Use the dedicated `sutrakriti` user (see 4.1). |
-| `ECONNREFUSED 127.0.0.1:3306` | MariaDB isn’t running: `sudo service mariadb start`. |
+| `ECONNREFUSED 127.0.0.1:3306` | MariaDB isn't running: `brew services start mariadb` (macOS) or `sudo service mariadb start` (Linux). |
 | `EADDRINUSE :3000` | Another process on 3000. Kill it or `PORT=3001 yarn dev`. |
 | Buy Now still hidden after env changes | Restart `yarn dev` — Next.js reads env at boot. |
 | Uploads land in DB but not on disk | Ensure `public/products/` exists & is writable. |
