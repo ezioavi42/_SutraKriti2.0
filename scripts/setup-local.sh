@@ -14,10 +14,11 @@
 #   bash scripts/setup-local.sh
 set -euo pipefail
 
-BLUE='\033[0;36m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
+BLUE='\033[0;36m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
 log() { echo -e "${BLUE}•${NC} $*"; }
 ok()  { echo -e "${GREEN}✓${NC} $*"; }
 warn(){ echo -e "${YELLOW}!${NC} $*"; }
+err() { echo -e "${RED}✗${NC} $*"; }
 
 OS="$(uname -s)"
 
@@ -27,9 +28,13 @@ if ! command -v mysql >/dev/null 2>&1 && ! command -v mariadb >/dev/null 2>&1; t
   if [[ "$OS" == "Linux" ]]; then
     sudo apt-get update -y && sudo apt-get install -y mariadb-server
   elif [[ "$OS" == "Darwin" ]]; then
-    brew install mariadb && brew services start mariadb
+    if ! command -v brew >/dev/null 2>&1; then
+      err "Homebrew not found. Install it from https://brew.sh then re-run this script."
+      exit 1
+    fi
+    brew install mariadb
   else
-    warn "Unsupported OS ($OS). Please install MariaDB manually and re-run."
+    err "Unsupported OS ($OS). Please install MariaDB manually and re-run."
     exit 1
   fi
 else
@@ -37,7 +42,36 @@ else
 fi
 
 # --- 2. Service --------------------------------------------------------
-if [[ "$OS" == "Linux" ]]; then
+start_wait() {
+  # Wait until the server accepts connections on 127.0.0.1:3306 (max ~20s)
+  local i=0
+  while (( i < 40 )); do
+    if mysqladmin -h 127.0.0.1 -P 3306 --connect-timeout=1 ping >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 0.5; i=$((i+1))
+  done
+  return 1
+}
+
+if [[ "$OS" == "Darwin" ]]; then
+  # Homebrew MariaDB does NOT auto-start after install. `brew services start`
+  # is idempotent (a no-op if already running).
+  log "Starting MariaDB via brew services …"
+  brew services start mariadb >/dev/null 2>&1 || true
+  # Bootstrap system tables on first-ever start if data dir is empty
+  # (safe no-op on subsequent runs).
+  if start_wait; then
+    ok "MariaDB is running (TCP 127.0.0.1:3306)."
+  else
+    warn "MariaDB did not respond over TCP within 20s. Falling back to socket…"
+    if ! mysql -uroot -e "SELECT 1" >/dev/null 2>&1; then
+      err "Could not connect to MariaDB. Try:  brew services restart mariadb  and re-run."
+      exit 1
+    fi
+    ok "MariaDB is reachable via unix socket."
+  fi
+elif [[ "$OS" == "Linux" ]]; then
   if command -v systemctl >/dev/null 2>&1; then
     sudo systemctl enable --now mariadb 2>/dev/null || sudo service mariadb start 2>/dev/null || true
   else
@@ -47,22 +81,22 @@ if [[ "$OS" == "Linux" ]]; then
       sleep 4
     fi
   fi
+  ok "MariaDB is running."
 fi
-ok "MariaDB is running."
 
 # --- 3. Database + user -----------------------------------------------
 log "Creating database and user …"
 
-# On macOS with Homebrew, MariaDB runs under your user account and does NOT
-# need sudo. On Linux the default install uses unix_socket auth for root,
-# so we do need sudo there.
+# Choose the right invocation:
+#  - macOS (Homebrew): connect over TCP, no sudo. Default root has no password.
+#  - Linux (Debian/Ubuntu): default root uses unix_socket auth — needs sudo, no password.
 if [[ "$OS" == "Darwin" ]]; then
-  MYSQL_CMD="mysql -uroot"
+  MYSQL_ROOT_CMD=(mysql -h 127.0.0.1 -P 3306 -uroot)
 else
-  MYSQL_CMD="sudo mysql -uroot"
+  MYSQL_ROOT_CMD=(sudo mysql -uroot)
 fi
 
-$MYSQL_CMD <<'SQL'
+"${MYSQL_ROOT_CMD[@]}" <<'SQL'
 CREATE DATABASE IF NOT EXISTS sutrakriti CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE USER IF NOT EXISTS 'sutrakriti'@'localhost' IDENTIFIED BY 'sutrakriti_dev_pw';
 CREATE USER IF NOT EXISTS 'sutrakriti'@'127.0.0.1' IDENTIFIED BY 'sutrakriti_dev_pw';
