@@ -180,21 +180,29 @@ Submit a test custom-order from the site → you should receive the styled email
 ## 10. Uploading product images (production)
 
 ### Manual (fastest)
-cPanel → **File Manager** → `~/sutrakriti/public/products/` → upload your `.webp` / `.jpg` files.
-Update the corresponding `image` URL in `lib/products.js` (`/products/your-file.webp`) and redeploy (`git pull && yarn build && restart`).
+cPanel → **File Manager** → `~/sutrakriti/public/products/<category>/` (one of
+`handbags`, `potli-bags`, `flowers`, `home-decor`, `uncategorised`) → upload
+your `.webp` / `.jpg` files. Update the matching `image` / `images` URL in
+`lib/products.js` (`/products/<category>/<file>`) and redeploy
+(`git pull && yarn build && restart`).
 
 ### API (remote)
 ```bash
 curl -X POST https://www.sutrakriti.com/api/upload \
   -H "x-upload-token: $UPLOAD_TOKEN" \
+  -F "category=handbags" \
   -F "file=@./my-tote.jpg"
 ```
 
 ### CLI helper
 ```bash
 UPLOAD_TOKEN=... NEXT_PUBLIC_BASE_URL=https://www.sutrakriti.com \
-  ./scripts/upload-product-image.sh ./my-tote.jpg
+  ./scripts/upload-product-image.sh ./my-tote.jpg handbags
 ```
+
+### Admin dashboard drag & drop
+Sign in at `https://www.sutrakriti.com/admin`, open the **Uploads** tab, choose
+a category, drop your files. Auth is your `sk_admin` cookie — no token exposed.
 
 ---
 

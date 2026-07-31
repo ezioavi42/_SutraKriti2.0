@@ -198,14 +198,34 @@ Check `curl http://localhost:3000/api/health` → `"mail": true`.
 
 ## 9. Uploading product images locally
 
-```bash
-curl -X POST http://localhost:3000/api/upload \
-  -H "x-upload-token: sutrakriti-dev-upload-token" \
-  -F "file=@./my-photo.jpg"
-# → { ok:true, url:"/products/1734...jpg", ... }
+Product images are organised by category under `public/products/`:
+
+```
+public/products/
+├── handbags/          # → served at /products/handbags/<file>
+├── potli-bags/
+├── flowers/
+├── home-decor/
+└── uncategorised/
 ```
 
-Or simply drag files into `public/products/`. They’re instantly served at `/products/<file>`.
+Four ways to add images:
+
+```bash
+# 1. CLI helper (category is the optional 2nd argument)
+./scripts/upload-product-image.sh ./my-tote.jpg handbags
+
+# 2. Direct API call
+curl -X POST http://localhost:3000/api/upload \
+  -H "x-upload-token: sutrakriti-dev-upload-token" \
+  -F "category=handbags" \
+  -F "file=@./my-photo.jpg"
+# → { ok:true, url:"/products/handbags/1734...jpg", category:"handbags", ... }
+
+# 3. Drop files manually into the correct category folder — served instantly.
+
+# 4. Admin dashboard (/admin) → Uploads tab → pick category → drag & drop.
+```
 
 ---
 

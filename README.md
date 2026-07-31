@@ -240,21 +240,59 @@ All UTF-8 mb4, InnoDB, UUID primary keys (where applicable).
 
 ---
 
-## 🖼️ Product images — 3 ways to add them
+## 🖼️ Product images — organised by category
 
-1. **Manual drop** — place `.jpg / .webp / .png` files into `public/products/`. They’re served at `/products/<file>`. Update `lib/products.js` `image` field to that URL.
-2. **API upload** —
+Product images live under `public/products/`, split into category folders that
+mirror the collections on the storefront:
+
+```
+public/products/
+├── handbags/          # Category: Handbags
+├── potli-bags/        # Category: Potli Bags
+├── flowers/           # Category: Flowers
+├── home-decor/        # Category: Home Decor
+├── uncategorised/     # Uploaded without a category
+└── README.md
+```
+
+The canonical category list lives in `lib/categories.js`. Files are served
+publicly at `/products/<category-slug>/<file>`.
+
+### Four ways to add images
+
+1. **Admin dashboard drag & drop** — Sign in at `/admin`, open the **Uploads**
+   tab. Pick a category from the dropdown and drop image files onto the upload
+   area (multi-file supported). Progress + result URLs appear inline.
+
+2. **API upload**
    ```bash
    curl -X POST "$NEXT_PUBLIC_BASE_URL/api/upload" \
      -H "x-upload-token: $UPLOAD_TOKEN" \
+     -F "category=handbags" \
      -F "file=@./my-tote.jpg"
    ```
-3. **CLI helper** —
-   ```bash
-   ./scripts/upload-product-image.sh ./my-tote.jpg
-   ```
+   `category` also accepts a query string (`?category=flowers`) or `x-category`
+   header. Omit it to save under `uncategorised/`.
 
-Recommended: **1200 × 1500 px (4:5)** portrait, WebP or high-quality JPEG under 500 KB.
+3. **CLI helper**
+   ```bash
+   ./scripts/upload-product-image.sh ./my-tote.jpg handbags
+   ```
+   Category is the optional 2nd argument (`handbags`, `potli-bags`, `flowers`, `home-decor`).
+
+4. **Manual drop / SFTP** — place files in the right category folder. Served
+   instantly at `/products/<slug>/<file>`. Remember to also update the `image`
+   / `images` field in `lib/products.js`.
+
+Recommended: **1200 × 1500 px (4:5)** portrait, WebP or high-quality JPEG under
+500 KB, colour-graded warm.
+
+### Auth for the upload endpoint
+
+`POST /api/upload` accepts **either**:
+- `x-upload-token: <UPLOAD_TOKEN>` header (CLI / server-to-server / CI), **or**
+- A valid `sk_admin` cookie (used automatically when uploading from the admin
+  dashboard — no token exposed to the browser).
 
 ---
 

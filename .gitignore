@@ -6,9 +6,10 @@ out
 *.log
 .DS_Store
 
-# uploaded product images (keep the folder, not the binaries)
-public/products/*
+# uploaded product images (keep the folder structure & READMEs, not the binaries)
+public/products/**/*
+!public/products/**/README.md
+!public/products/**/.gitkeep
 !public/products/README.md
-!public/products/.gitkeep
 node_modules/@next/swc-linux-arm64-musl/next-swc.linux-arm64-musl.node
 node_modules/@next/swc-linux-arm64-gnu/next-swc.linux-arm64-gnu.node

@@ -6,6 +6,7 @@ import path from 'node:path'
 import { query, initSchema } from '@/lib/db'
 import { sendMail, renderCustomOrderEmail, renderOrderAcceptanceEmail, renderCustomerAcknowledgementEmail, isMailConfigured } from '@/lib/mailer'
 import { PRODUCTS } from '@/lib/products'
+import { toSlug, CATEGORY_SLUGS, UNCATEGORISED } from '@/lib/categories'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -59,14 +60,30 @@ function slugify(s = '') {
 }
 
 async function handleUpload(request) {
+  // Accept either the shared UPLOAD_TOKEN header OR a valid admin session cookie.
   const token = request.headers.get('x-upload-token') || ''
   const expected = process.env.UPLOAD_TOKEN
-  if (!expected || token !== expected) return err('unauthorised', 401)
+  const tokenOk = expected && token === expected
+  const adminOk = isAdmin(request)
+  if (!tokenOk && !adminOk) return err('unauthorised', 401)
 
   let form
   try { form = await request.formData() } catch { return err('multipart/form-data required', 400) }
   const file = form.get('file')
   if (!file || typeof file === 'string') return err('file field required', 400)
+
+  // Category may come from form field, query string, or header. It's optional —
+  // when omitted the file is stored under `uncategorised/`.
+  const url = new URL(request.url)
+  const catRaw = form.get('category') || url.searchParams.get('category') || request.headers.get('x-category') || ''
+  const category = catRaw ? toSlug(catRaw) : null
+  if (catRaw && !category) {
+    return err('invalid_category', 400, {
+      message: `Unknown category '${catRaw}'.`,
+      allowed: [...CATEGORY_SLUGS, UNCATEGORISED],
+    })
+  }
+  const catSlug = category || UNCATEGORISED
 
   const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/avif', 'image/gif']
   const mime = file.type || 'application/octet-stream'
@@ -75,8 +92,9 @@ async function handleUpload(request) {
   const buf = Buffer.from(await file.arrayBuffer())
   if (buf.byteLength > 8 * 1024 * 1024) return err('file too large (max 8 MB)', 413)
 
-  const uploadDir = process.env.UPLOAD_DIR || 'public/products'
-  const absDir = path.isAbsolute(uploadDir) ? uploadDir : path.join(process.cwd(), uploadDir)
+  const uploadRoot = process.env.UPLOAD_DIR || 'public/products'
+  const absRoot = path.isAbsolute(uploadRoot) ? uploadRoot : path.join(process.cwd(), uploadRoot)
+  const absDir = path.join(absRoot, catSlug)
   await fs.mkdir(absDir, { recursive: true })
 
   const original = file.name || 'image'
@@ -86,16 +104,16 @@ async function handleUpload(request) {
   const abs = path.join(absDir, filename)
   await fs.writeFile(abs, buf)
 
-  const url = `/products/${filename}`
+  const publicUrl = `/products/${catSlug}/${filename}`
   const id = uuidv4()
   try {
     await query(
-      'INSERT INTO uploads (id, filename, url, mime, size_bytes) VALUES (?, ?, ?, ?, ?)',
-      [id, filename, url, mime, buf.byteLength]
+      'INSERT INTO uploads (id, filename, url, category, mime, size_bytes) VALUES (?, ?, ?, ?, ?, ?)',
+      [id, filename, publicUrl, catSlug, mime, buf.byteLength]
     )
   } catch (e) { console.error('[upload] db insert failed:', e?.message) }
 
-  return ok({ ok: true, id, filename, url, size: buf.byteLength, mime })
+  return ok({ ok: true, id, filename, url: publicUrl, category: catSlug, size: buf.byteLength, mime })
 }
 
 async function handleRoute(request, { params }) {
@@ -408,9 +426,12 @@ async function handleRoute(request, { params }) {
         if (!rows.length) return err('upload not found', 404)
         const u = rows[0]
         try {
-          const uploadDir = process.env.UPLOAD_DIR || 'public/products'
-          const abs = path.isAbsolute(uploadDir) ? uploadDir : path.join(process.cwd(), uploadDir)
-          await fs.unlink(path.join(abs, u.filename))
+          const uploadRoot = process.env.UPLOAD_DIR || 'public/products'
+          const absRoot = path.isAbsolute(uploadRoot) ? uploadRoot : path.join(process.cwd(), uploadRoot)
+          // Support both new category folders and legacy top-level files
+          const rel = String(u.url || '').replace(/^\/products\//, '')
+          const target = rel ? path.join(absRoot, rel) : path.join(absRoot, u.filename)
+          await fs.unlink(target)
         } catch (e) { console.warn('[admin] file delete failed:', e?.message) }
         await query('DELETE FROM uploads WHERE id=?', [id])
         return ok({ ok: true })

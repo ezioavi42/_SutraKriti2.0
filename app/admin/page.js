@@ -201,7 +201,121 @@ function OrderDialog({ order, onClose, onUpdated }) {
   )
 }
 
-/* ---------- Main dashboard ---------- */
+/* ---------- Category upload panel (drag & drop) ---------- */
+const ADMIN_CATEGORIES = [
+  { name: 'Handbags',   slug: 'handbags' },
+  { name: 'Potli Bags', slug: 'potli-bags' },
+  { name: 'Flowers',    slug: 'flowers' },
+  { name: 'Home Decor', slug: 'home-decor' },
+  { name: 'Uncategorised', slug: 'uncategorised' },
+]
+
+function UploadPanel({ onUploaded }) {
+  const [category, setCategory] = useState('handbags')
+  const [drag, setDrag] = useState(false)
+  const [queue, setQueue] = useState([]) // { name, status, progress, url?, error? }
+
+  const upload = async (files) => {
+    const list = Array.from(files)
+    setQueue(q => [
+      ...list.map(f => ({ name: f.name, status: 'queued', progress: 0 })),
+      ...q,
+    ])
+    for (let i = 0; i < list.length; i++) {
+      const f = list[i]
+      setQueue(q => q.map(x => x.name === f.name && x.status === 'queued' ? { ...x, status: 'uploading' } : x))
+      const fd = new FormData()
+      fd.append('file', f)
+      fd.append('category', category)
+      try {
+        const r = await fetch('/api/upload', { method: 'POST', credentials: 'include', body: fd })
+        const j = await r.json().catch(() => ({}))
+        if (r.ok) {
+          setQueue(q => q.map(x => x.name === f.name && x.status === 'uploading' ? { ...x, status: 'done', url: j.url } : x))
+        } else {
+          setQueue(q => q.map(x => x.name === f.name && x.status === 'uploading' ? { ...x, status: 'failed', error: j.error || `HTTP ${r.status}` } : x))
+        }
+      } catch (e) {
+        setQueue(q => q.map(x => x.name === f.name && x.status === 'uploading' ? { ...x, status: 'failed', error: e.message } : x))
+      }
+    }
+    toast.success('Upload finished.')
+    onUploaded?.()
+  }
+
+  const onDrop = (e) => {
+    e.preventDefault(); setDrag(false)
+    if (e.dataTransfer?.files?.length) upload(e.dataTransfer.files)
+  }
+  const onFilePicked = (e) => {
+    if (e.target.files?.length) upload(e.target.files)
+    e.target.value = ''
+  }
+
+  return (
+    <Card className="bg-ivory border-beige">
+      <CardHeader>
+        <CardTitle className="font-serif text-xl text-charcoal">Upload product images</CardTitle>
+        <div className="text-sm text-charcoal/60">
+          Files are saved under <code className="text-terracotta">public/products/&lt;category&gt;/</code> and served at <code>/products/&lt;category&gt;/&lt;file&gt;</code>.
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center gap-3">
+          <div className="text-[10px] tracking-[0.2em] uppercase text-charcoal/60 md:min-w-[110px]">Category</div>
+          <Select value={category} onValueChange={setCategory}>
+            <SelectTrigger className="h-10 bg-cream border-beige md:w-64">
+              <SelectValue placeholder="Choose category" />
+            </SelectTrigger>
+            <SelectContent>
+              {ADMIN_CATEGORIES.map(c => (
+                <SelectItem key={c.slug} value={c.slug}>{c.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <label className="ml-auto">
+            <input type="file" multiple accept="image/*" onChange={onFilePicked} className="hidden" />
+            <span className="inline-flex items-center gap-2 rounded-full bg-charcoal hover:bg-black text-cream px-4 h-10 cursor-pointer text-sm">
+              <ImageIcon className="h-4 w-4" /> Choose files
+            </span>
+          </label>
+        </div>
+
+        <div
+          onDragOver={e => { e.preventDefault(); setDrag(true) }}
+          onDragLeave={() => setDrag(false)}
+          onDrop={onDrop}
+          className={`rounded-2xl border-2 border-dashed p-8 md:p-12 text-center transition-colors ${drag ? 'border-terracotta bg-terracotta/5' : 'border-beige bg-cream/60'}`}
+        >
+          <ImageIcon className={`h-10 w-10 mx-auto ${drag ? 'text-terracotta' : 'text-charcoal/40'}`} />
+          <div className="mt-3 font-serif text-lg text-charcoal">Drag & drop images here</div>
+          <div className="text-sm text-charcoal/60 mt-1">JPG, PNG, WebP, AVIF or GIF · up to 8 MB each · multi-file supported</div>
+        </div>
+
+        {queue.length > 0 && (
+          <div className="rounded-xl bg-cream border border-beige p-3 space-y-2 max-h-72 overflow-y-auto">
+            {queue.map((q, i) => (
+              <div key={`${q.name}-${i}`} className="flex items-center gap-3 text-sm">
+                <div className="flex-1 truncate text-charcoal">{q.name}</div>
+                {q.status === 'queued' && <span className="text-[11px] text-charcoal/50">queued</span>}
+                {q.status === 'uploading' && <span className="text-[11px] text-terracotta">uploading…</span>}
+                {q.status === 'done' && (
+                  <>
+                    <span className="text-[11px] text-sage-dark">done</span>
+                    <button onClick={() => { navigator.clipboard.writeText(q.url); toast.success('URL copied') }}
+                            className="text-[11px] text-terracotta hover:underline">copy URL</button>
+                    <a href={q.url} target="_blank" rel="noreferrer" className="text-[11px] text-charcoal/70 hover:underline">open</a>
+                  </>
+                )}
+                {q.status === 'failed' && <span className="text-[11px] text-red-600">failed: {q.error}</span>}
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
 function Dashboard() {
   const [tab, setTab] = useState('overview')
   const [busy, setBusy] = useState(false)
@@ -215,6 +329,7 @@ function Dashboard() {
 
   const [statusFilter, setStatusFilter] = useState('all')
   const [search, setSearch] = useState('')
+  const [uploadCat, setUploadCat] = useState('all')
   const [selectedOrder, setSelectedOrder] = useState(null)
 
   const loadAll = async () => {
@@ -243,6 +358,11 @@ function Dashboard() {
       [o.name, o.contact, o.email, o.product_type, o.occasion, o.notes].filter(Boolean).some(v => String(v).toLowerCase().includes(q))
     )
   }, [orders, search])
+
+  const filteredUploads = useMemo(() => {
+    if (uploadCat === 'all') return uploads
+    return uploads.filter(u => (u.category || 'uncategorised') === uploadCat)
+  }, [uploads, uploadCat])
 
   const logout = async () => {
     await fetch('/api/admin/logout', { method: 'POST', credentials: 'include' })
@@ -410,28 +530,41 @@ function Dashboard() {
           </TabsContent>
 
           {/* Uploads */}
-          <TabsContent value="uploads">
+          <TabsContent value="uploads" className="space-y-6">
+            <UploadPanel onUploaded={loadAll} />
             <Card className="bg-ivory border-beige">
-              <CardHeader>
-                <CardTitle className="font-serif text-xl text-charcoal">Product image uploads</CardTitle>
-                <div className="text-sm text-charcoal/60">
-                  Files stored under <code className="text-terracotta">public/products/</code>, served at <code>/products/&lt;file&gt;</code>.
+              <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                <div>
+                  <CardTitle className="font-serif text-xl text-charcoal">Product image library</CardTitle>
+                  <div className="text-sm text-charcoal/60">Files stored under <code className="text-terracotta">public/products/&lt;category&gt;/</code>.</div>
                 </div>
+                <Select value={uploadCat} onValueChange={setUploadCat}>
+                  <SelectTrigger className="h-9 bg-cream border-beige w-52"><SelectValue placeholder="Filter category" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All categories</SelectItem>
+                    {ADMIN_CATEGORIES.map(c => (
+                      <SelectItem key={c.slug} value={c.slug}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </CardHeader>
               <CardContent>
-                {uploads.length === 0 ? (
+                {filteredUploads.length === 0 ? (
                   <div className="py-14 text-center text-charcoal/50">
-                    No uploads yet. Use <code className="text-terracotta">POST /api/upload</code> or the CLI helper.
+                    No uploads in this category yet.
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    {uploads.map(u => (
-                      <motion.div key={u.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="group relative rounded-xl overflow-hidden border border-beige bg-cream">
+                    {filteredUploads.map(u => (
+                      <div key={u.id} className="group relative rounded-xl overflow-hidden border border-beige bg-cream">
                         <div className="aspect-square bg-beige/40">
-                          <img src={u.url} alt={u.filename} className="w-full h-full object-cover" />
+                          <img src={u.url} alt={u.filename} className="w-full h-full object-cover" loading="lazy" />
                         </div>
                         <div className="p-3 space-y-1">
-                          <div className="text-xs text-charcoal truncate" title={u.filename}>{u.filename}</div>
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="text-xs text-charcoal truncate flex-1" title={u.filename}>{u.filename}</div>
+                            {u.category && <Badge className="bg-beige text-charcoal border-0 rounded-full text-[9px] tracking-widest uppercase">{u.category}</Badge>}
+                          </div>
                           <div className="text-[11px] text-charcoal/50 flex items-center justify-between">
                             <span>{fmtSize(u.size_bytes)}</span>
                             <span>{fmtDate(u.created_at)}</span>
@@ -445,7 +578,7 @@ function Dashboard() {
                             <Trash2 className="h-4 w-4" />
                           </button>
                         </div>
-                      </motion.div>
+                      </div>
                     ))}
                   </div>
                 )}
