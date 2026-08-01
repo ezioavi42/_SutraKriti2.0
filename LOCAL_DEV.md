@@ -227,9 +227,40 @@ curl -X POST http://localhost:3000/api/upload \
 # 4. Admin dashboard (/admin) → Uploads tab → pick category → drag & drop.
 ```
 
+Once uploaded, open `/admin` → **Products** → *Edit* on the target row and
+paste the returned URL into the *Images* box.
+
 ---
 
-## 10. Useful commands
+## 10. Managing products & inventory (local)
+
+Products are persisted in the MySQL `products` table (schema created by
+`node scripts/init-db.js`). On first boot the table is auto-seeded from
+`lib/products.js` with a starting stock of `10` per product.
+
+- **CRUD**: `/admin` → **Products** tab → *New product* / *Edit* / *Delete*.
+- **Stock adjustments**: *Stock* button on any row → increment/decrement or
+  set an absolute quantity, with a reason (restock / sale / return / damage
+  / correction). Movements are appended to `inventory_movements` for a full
+  audit trail visible inline in the dialog.
+- **Public catalogue**: `GET /api/products` returns only `is_active = 1`
+  rows sorted by `sort_order`.
+- **Programmatic access**: see the *Managing products & inventory* section
+  of [`README.md`](./README.md) for `curl` examples.
+
+Sanity-check queries:
+
+```bash
+mysql -usutrakriti -psutrakriti_dev_pw sutrakriti \
+  -e "SELECT id, name, stock_quantity, is_active FROM products ORDER BY sort_order LIMIT 20;"
+
+mysql -usutrakriti -psutrakriti_dev_pw sutrakriti \
+  -e "SELECT * FROM inventory_movements ORDER BY created_at DESC LIMIT 20;"
+```
+
+---
+
+## 11. Useful commands
 
 ```bash
 yarn dev            # dev server (hot reload)
@@ -237,7 +268,7 @@ yarn build          # production build
 yarn start          # start the production build
 yarn lint           # eslint
 
-node scripts/init-db.js                # (re)create MySQL schema
+node scripts/init-db.js                # (re)create MySQL schema + seed products
 bash scripts/setup-local.sh            # one-shot setup
 bash scripts/upload-product-image.sh <file>
 
@@ -246,7 +277,7 @@ sudo mysql -usutrakriti -psutrakriti_dev_pw sutrakriti
 
 ---
 
-## 11. Common gotchas
+## 12. Common gotchas
 
 | Symptom | Fix |
 |---|---|
@@ -256,12 +287,16 @@ sudo mysql -usutrakriti -psutrakriti_dev_pw sutrakriti
 | `EADDRINUSE :3000` | Another process on 3000. Kill it or `PORT=3001 yarn dev`. |
 | Buy Now still hidden after env changes | Restart `yarn dev` — Next.js reads env at boot. |
 | Uploads land in DB but not on disk | Ensure `public/products/` exists & is writable. |
+| Storefront shows no products | Run `node scripts/init-db.js` — it seeds the `products` table from `lib/products.js` when empty. |
+| Stock button returns `insufficient_stock` | Deltas cannot drive stock below 0. Use *Set exact* to override, or top up first with a positive delta. |
 
 ---
 
-## 12. Next steps
+## 13. Next steps
 
 - 🧩 Explore `app/page.js` — all sections are top-level components.
 - 🎨 Colors & tokens live in `app/globals.css` (`:root` and `@layer utilities`).
 - 🗄 API routes live in `app/api/[[...path]]/route.js` (single catch-all).
+- 📦 Product persistence lives in `lib/productsDb.js`; static seed data in
+  `lib/products.js`; schema/DDL in `lib/db.js` + `scripts/init-db.js`.
 - 📚 Full docs: [`README.md`](./README.md), production: [`DEPLOYMENT.md`](./DEPLOYMENT.md).

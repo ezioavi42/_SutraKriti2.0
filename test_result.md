@@ -664,7 +664,7 @@ agent_communication:
       7. ✅ POST /api/razorpay/verify - Field validation working (400 for missing fields)
       8. ✅ GET /api/admin/custom-orders - Returns orders array from MongoDB
       
-      All endpoints tested against https://premium-threads-332.preview.emergentagent.com/api
+      All endpoints tested against https://stock-admin-panel-2.preview.emergentagent.com/api
       MongoDB integration verified for all data persistence operations.
       No critical issues found. Backend is production-ready for MVP.
 
@@ -687,7 +687,7 @@ agent_communication:
       11. ✅ GET /api/admin/uploads - Returns uploads from MySQL (2 uploads retrieved)
       12. ✅ GET /api/admin/newsletter - Returns subscribers from MySQL (2 subscribers retrieved)
       
-      All endpoints tested against https://premium-threads-332.preview.emergentagent.com/api
+      All endpoints tested against https://stock-admin-panel-2.preview.emergentagent.com/api
       MySQL integration verified for all data persistence operations.
       Schema auto-creation working correctly (custom_orders, contacts, newsletter, payments, uploads tables).
       
@@ -754,7 +754,7 @@ agent_communication:
       34. ✅ Session persistence - Same cookie works for all admin endpoints
       35. ✅ POST /api/admin/logout - Clears cookie successfully
       
-      All endpoints tested against https://premium-threads-332.preview.emergentagent.com/api
+      All endpoints tested against https://stock-admin-panel-2.preview.emergentagent.com/api
       
       CRITICAL VALIDATIONS CONFIRMED:
       - ✅ Admin password authentication working (sutrakriti-admin-dev)

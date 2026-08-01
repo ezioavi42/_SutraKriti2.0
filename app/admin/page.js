@@ -6,7 +6,8 @@ import { Toaster, toast } from 'sonner'
 import {
   LogOut, RefreshCw, Search, CheckCircle2, Clock, Send, Mail, Trash2, Copy,
   Image as ImageIcon, Users, MessageSquare, CreditCard, ClipboardList, Undo2,
-  ExternalLink, StickyNote, ShieldCheck, Sparkles,
+  ExternalLink, StickyNote, ShieldCheck, Sparkles, Package, Plus, Minus,
+  Pencil, Boxes, AlertTriangle, PackageX, PackagePlus,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -326,26 +327,31 @@ function Dashboard() {
   const [contacts, setContacts] = useState([])
   const [subs, setSubs] = useState([])
   const [payments, setPayments] = useState([])
+  const [products, setProducts] = useState([])
 
   const [statusFilter, setStatusFilter] = useState('all')
   const [search, setSearch] = useState('')
   const [uploadCat, setUploadCat] = useState('all')
   const [selectedOrder, setSelectedOrder] = useState(null)
+  const [productDialog, setProductDialog] = useState(null) // { mode:'create'|'edit', product }
+  const [stockDialog, setStockDialog] = useState(null)     // product object
 
   const loadAll = async () => {
     setBusy(true)
     try {
       const j = async (u) => (await fetch(u, { credentials: 'include' })).json()
-      const [s, o, u, c, n, p] = await Promise.all([
+      const [s, o, u, c, n, p, pr] = await Promise.all([
         j('/api/admin/stats'),
         j(`/api/admin/custom-orders${statusFilter !== 'all' ? `?status=${statusFilter}` : ''}`),
         j('/api/admin/uploads'),
         j('/api/admin/contacts'),
         j('/api/admin/newsletter'),
         j('/api/admin/payments'),
+        j('/api/admin/products'),
       ])
       setStats(s); setOrders(o.orders || []); setUploads(u.uploads || [])
       setContacts(c.contacts || []); setSubs(n.subscribers || []); setPayments(p.payments || [])
+      setProducts(pr.products || [])
     } catch (e) { toast.error('Failed to load data') }
     finally { setBusy(false) }
   }
@@ -409,6 +415,9 @@ function Dashboard() {
             <TabsTrigger value="overview" className="rounded-full data-[state=active]:bg-terracotta data-[state=active]:text-white px-4">
               <ClipboardList className="h-4 w-4 mr-2" /> Overview
             </TabsTrigger>
+            <TabsTrigger value="products" className="rounded-full data-[state=active]:bg-terracotta data-[state=active]:text-white px-4" data-testid="tab-products">
+              <Package className="h-4 w-4 mr-2" /> Products {stats?.products?.lowStock ? <span className="ml-2 inline-flex items-center justify-center h-5 min-w-5 px-1.5 rounded-full bg-terracotta/20 text-[11px]" data-testid="low-stock-badge">{stats.products.lowStock}</span> : null}
+            </TabsTrigger>
             <TabsTrigger value="orders" className="rounded-full data-[state=active]:bg-terracotta data-[state=active]:text-white px-4">
               Custom Orders {stats?.orders?.pending ? <span className="ml-2 inline-flex items-center justify-center h-5 min-w-5 px-1.5 rounded-full bg-sage/25 text-[11px]">{stats.orders.pending}</span> : null}
             </TabsTrigger>
@@ -430,8 +439,8 @@ function Dashboard() {
           <TabsContent value="overview" className="space-y-6">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <StatCard label="Total Orders" value={stats?.orders?.total ?? '—'} sub={`${stats?.orders?.pending ?? 0} pending`} />
-              <StatCard label="Accepted" value={stats?.orders?.accepted ?? '—'} sub={`${stats?.orders?.completed ?? 0} completed`} />
-              <StatCard label="Uploads" value={stats?.uploads ?? '—'} sub="Product images" />
+              <StatCard label="Products" value={stats?.products?.total ?? '—'} sub={`${stats?.products?.active ?? 0} active · ${stats?.products?.totalStock ?? 0} in stock`} testId="stat-products" />
+              <StatCard label="Low / Out of stock" value={`${stats?.products?.lowStock ?? 0} / ${stats?.products?.outOfStock ?? 0}`} sub="Needs attention" testId="stat-low-stock" />
               <StatCard label="Subscribers" value={stats?.newsletter ?? '—'} sub={`${stats?.contacts ?? 0} messages`} />
             </div>
 
@@ -468,6 +477,21 @@ function Dashboard() {
                 </Table>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Products (persisted in MySQL) */}
+          <TabsContent value="products" className="space-y-6">
+            <ProductsPanel
+              products={products}
+              onCreate={() => setProductDialog({ mode: 'create', product: null })}
+              onEdit={(p) => setProductDialog({ mode: 'edit', product: p })}
+              onStock={(p) => setStockDialog(p)}
+              onDelete={async (p) => {
+                if (!confirm(`Delete "${p.name}" permanently? This cannot be undone.`)) return
+                const r = await fetch(`/api/admin/products/${p.id}`, { method: 'DELETE', credentials: 'include' })
+                if (r.ok) { toast.success('Product deleted'); loadAll() } else toast.error('Delete failed')
+              }}
+            />
           </TabsContent>
 
           {/* Orders */}
@@ -630,13 +654,23 @@ function Dashboard() {
       </main>
 
       <OrderDialog order={selectedOrder} onClose={() => setSelectedOrder(null)} onUpdated={() => loadAll()} />
+      <ProductDialog
+        state={productDialog}
+        onClose={() => setProductDialog(null)}
+        onSaved={() => { setProductDialog(null); loadAll() }}
+      />
+      <StockDialog
+        product={stockDialog}
+        onClose={() => setStockDialog(null)}
+        onSaved={() => { setStockDialog(null); loadAll() }}
+      />
     </div>
   )
 }
 
-function StatCard({ label, value, sub }) {
+function StatCard({ label, value, sub, testId }) {
   return (
-    <Card className="bg-ivory border-beige">
+    <Card className="bg-ivory border-beige" data-testid={testId}>
       <CardContent className="p-5">
         <div className="text-[10px] tracking-[0.3em] uppercase text-charcoal/60">{label}</div>
         <div className="mt-1 font-serif text-4xl text-charcoal">{value}</div>
@@ -672,6 +706,439 @@ function SimpleTable({ title, rows, columns, empty }) {
         </Table>
       </CardContent>
     </Card>
+  )
+}
+
+/* ---------- Products panel: CRUD + inventory ---------- */
+function StockBadge({ product }) {
+  const q = product.stockQuantity ?? 0
+  const t = product.lowStockThreshold ?? 3
+  if (q === 0) return <Badge className="bg-red-100 text-red-800 border border-red-300 rounded-full text-[10px] tracking-widest uppercase" data-testid={`stock-badge-${product.id}`}>Out of stock</Badge>
+  if (q <= t) return <Badge className="bg-amber-100 text-amber-900 border border-amber-300 rounded-full text-[10px] tracking-widest uppercase" data-testid={`stock-badge-${product.id}`}>Low · {q}</Badge>
+  return <Badge className="bg-sage/25 text-charcoal border border-sage/40 rounded-full text-[10px] tracking-widest uppercase" data-testid={`stock-badge-${product.id}`}>In stock · {q}</Badge>
+}
+
+function ProductsPanel({ products, onCreate, onEdit, onStock, onDelete }) {
+  const [q, setQ] = useState('')
+  const [cat, setCat] = useState('all')
+  const [stockFilter, setStockFilter] = useState('all') // all | in | low | out
+
+  const categories = useMemo(() => {
+    const set = new Set(products.map(p => p.category).filter(Boolean))
+    return ['all', ...Array.from(set)]
+  }, [products])
+
+  const filtered = useMemo(() => {
+    return products.filter(p => {
+      if (cat !== 'all' && p.category !== cat) return false
+      const q0 = q.trim().toLowerCase()
+      if (q0 && ![p.name, p.category, p.id, p.description].filter(Boolean).some(v => String(v).toLowerCase().includes(q0))) return false
+      const qty = p.stockQuantity ?? 0
+      const t = p.lowStockThreshold ?? 3
+      if (stockFilter === 'out' && qty !== 0) return false
+      if (stockFilter === 'low' && !(qty > 0 && qty <= t)) return false
+      if (stockFilter === 'in'  && qty <= t) return false
+      return true
+    })
+  }, [products, q, cat, stockFilter])
+
+  return (
+    <Card className="bg-ivory border-beige" data-testid="products-card">
+      <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <div>
+          <CardTitle className="font-serif text-xl text-charcoal">Product catalogue</CardTitle>
+          <div className="text-sm text-charcoal/60">Persisted in MySQL · {products.length} product{products.length === 1 ? '' : 's'}</div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-charcoal/40" />
+            <Input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search name, id…" className="pl-9 h-9 bg-cream border-beige w-56" data-testid="product-search-input" />
+          </div>
+          <Select value={cat} onValueChange={setCat}>
+            <SelectTrigger className="h-9 bg-cream border-beige w-44" data-testid="product-category-filter"><SelectValue placeholder="Category" /></SelectTrigger>
+            <SelectContent>
+              {categories.map(c => <SelectItem key={c} value={c}>{c === 'all' ? 'All categories' : c}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={stockFilter} onValueChange={setStockFilter}>
+            <SelectTrigger className="h-9 bg-cream border-beige w-36" data-testid="product-stock-filter"><SelectValue placeholder="Stock" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All stock</SelectItem>
+              <SelectItem value="in">In stock</SelectItem>
+              <SelectItem value="low">Low</SelectItem>
+              <SelectItem value="out">Out</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button onClick={onCreate} className="rounded-full bg-terracotta hover:bg-[color:var(--sk-terracotta-dark)] text-white" data-testid="add-product-btn">
+            <Plus className="h-4 w-4 mr-2" /> New product
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="p-0 overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent border-beige">
+              <TableHead className="text-[10px] tracking-[0.2em] uppercase text-charcoal/60">Image</TableHead>
+              <TableHead className="text-[10px] tracking-[0.2em] uppercase text-charcoal/60">Name</TableHead>
+              <TableHead className="text-[10px] tracking-[0.2em] uppercase text-charcoal/60">Category</TableHead>
+              <TableHead className="text-[10px] tracking-[0.2em] uppercase text-charcoal/60">Price</TableHead>
+              <TableHead className="text-[10px] tracking-[0.2em] uppercase text-charcoal/60">Stock</TableHead>
+              <TableHead className="text-[10px] tracking-[0.2em] uppercase text-charcoal/60">Status</TableHead>
+              <TableHead className="text-[10px] tracking-[0.2em] uppercase text-charcoal/60 text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filtered.map(p => (
+              <TableRow key={p.id} className="border-beige hover:bg-cream/50" data-testid={`product-row-${p.id}`}>
+                <TableCell>
+                  <div className="w-14 h-14 rounded-lg overflow-hidden bg-beige/40 border border-beige">
+                    {p.image ? <img src={p.image} alt={p.name} className="w-full h-full object-cover" loading="lazy" /> : <div className="w-full h-full flex items-center justify-center text-charcoal/30"><ImageIcon className="h-5 w-5" /></div>}
+                  </div>
+                </TableCell>
+                <TableCell className="font-medium text-charcoal">{p.name}
+                  <div className="text-[11px] text-charcoal/50">{p.id}</div>
+                </TableCell>
+                <TableCell className="text-charcoal/80">{p.category || '—'}</TableCell>
+                <TableCell className="text-charcoal/80 whitespace-nowrap">₹{Number(p.price).toLocaleString('en-IN')}</TableCell>
+                <TableCell><StockBadge product={p} /></TableCell>
+                <TableCell>
+                  {p.isActive
+                    ? <Badge className="bg-sage/25 text-charcoal border border-sage/40 rounded-full text-[10px] tracking-widest uppercase">Active</Badge>
+                    : <Badge className="bg-charcoal/10 text-charcoal border border-charcoal/20 rounded-full text-[10px] tracking-widest uppercase">Hidden</Badge>}
+                </TableCell>
+                <TableCell className="text-right space-x-1 whitespace-nowrap">
+                  <Button size="sm" variant="ghost" onClick={() => onStock(p)} data-testid={`stock-btn-${p.id}`}>
+                    <Boxes className="h-4 w-4 mr-1" /> Stock
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => onEdit(p)} data-testid={`edit-product-btn-${p.id}`}>
+                    <Pencil className="h-4 w-4 mr-1" /> Edit
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => onDelete(p)} className="text-red-600 hover:text-red-700" data-testid={`delete-product-btn-${p.id}`}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+            {filtered.length === 0 && (
+              <TableRow><TableCell colSpan={7} className="text-center text-charcoal/50 py-10">No products match your filters.</TableCell></TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  )
+}
+
+function ProductDialog({ state, onClose, onSaved }) {
+  const isEdit = state?.mode === 'edit'
+  const [form, setForm] = useState(() => ({
+    id: '', name: '', category: '', price: 0,
+    description: '', material: '', dimensions: '', care: '', delivery: '',
+    colors: '', images: '',
+    is_new: false, is_bestseller: false, is_active: true,
+    stock_quantity: 0, low_stock_threshold: 3, sort_order: 999,
+  }))
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    if (!state) return
+    if (state.mode === 'edit' && state.product) {
+      const p = state.product
+      setForm({
+        id: p.id || '', name: p.name || '', category: p.category || '',
+        price: Number(p.price) || 0,
+        description: p.description || '', material: p.material || '',
+        dimensions: p.dimensions || '', care: p.care || '', delivery: p.delivery || '',
+        colors: (p.colors || []).join(', '),
+        images: (p.images || []).join('\n'),
+        is_new: !!p.new, is_bestseller: !!p.bestseller, is_active: !!p.isActive,
+        stock_quantity: Number(p.stockQuantity) || 0,
+        low_stock_threshold: Number(p.lowStockThreshold) || 3,
+        sort_order: Number(p.sortOrder) || 999,
+      })
+    } else {
+      setForm({
+        id: '', name: '', category: 'Handbags', price: 0,
+        description: '', material: '', dimensions: '', care: '', delivery: '',
+        colors: '', images: '',
+        is_new: false, is_bestseller: false, is_active: true,
+        stock_quantity: 0, low_stock_threshold: 3, sort_order: 999,
+      })
+    }
+  }, [state])
+
+  const submit = async (e) => {
+    e.preventDefault()
+    if (!form.name.trim()) { toast.error('Name is required'); return }
+    setBusy(true)
+    try {
+      const payload = {
+        ...form,
+        price: Number(form.price) || 0,
+        stock_quantity: Number(form.stock_quantity) || 0,
+        low_stock_threshold: Number(form.low_stock_threshold) || 0,
+        sort_order: Number(form.sort_order) || 0,
+        colors: form.colors.split(',').map(s => s.trim()).filter(Boolean),
+        images: form.images.split(/\n|,/).map(s => s.trim()).filter(Boolean),
+      }
+      if (isEdit) delete payload.id
+      const url = isEdit ? `/api/admin/products/${state.product.id}` : '/api/admin/products'
+      const method = isEdit ? 'PATCH' : 'POST'
+      const r = await fetch(url, {
+        method, credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) { toast.error(j.error || 'Save failed'); return }
+      toast.success(isEdit ? 'Product updated' : 'Product created')
+      onSaved?.()
+    } finally { setBusy(false) }
+  }
+
+  if (!state) return null
+
+  return (
+    <Dialog open={!!state} onOpenChange={onClose}>
+      <DialogContent className="max-w-3xl bg-cream border-beige max-h-[90vh] overflow-y-auto" data-testid="product-dialog">
+        <DialogHeader>
+          <div className="text-[10px] tracking-[0.3em] uppercase text-terracotta">{isEdit ? 'Edit product' : 'New product'}</div>
+          <DialogTitle className="font-serif text-2xl text-charcoal">
+            {isEdit ? state.product.name : 'Add a new product'}
+          </DialogTitle>
+          <DialogDescription className="text-charcoal/70">
+            Stored in the <code className="text-terracotta">products</code> MySQL table. Inventory is managed separately from the Stock button.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={submit} className="space-y-4">
+          <div className="grid md:grid-cols-2 gap-3">
+            {!isEdit && (
+              <div>
+                <div className="text-[10px] tracking-[0.2em] uppercase text-charcoal/50 mb-1">Product ID (optional)</div>
+                <Input value={form.id} onChange={e=>setForm(f=>({...f, id:e.target.value}))} placeholder="auto-generated from name" className="bg-ivory border-beige" data-testid="product-id-input" />
+              </div>
+            )}
+            <div className={isEdit ? 'md:col-span-2' : ''}>
+              <div className="text-[10px] tracking-[0.2em] uppercase text-charcoal/50 mb-1">Name *</div>
+              <Input required value={form.name} onChange={e=>setForm(f=>({...f, name:e.target.value}))} className="bg-ivory border-beige" data-testid="product-name-input" />
+            </div>
+            <div>
+              <div className="text-[10px] tracking-[0.2em] uppercase text-charcoal/50 mb-1">Category</div>
+              <Input value={form.category} onChange={e=>setForm(f=>({...f, category:e.target.value}))} placeholder="e.g. Handbags" className="bg-ivory border-beige" data-testid="product-category-input" />
+            </div>
+            <div>
+              <div className="text-[10px] tracking-[0.2em] uppercase text-charcoal/50 mb-1">Price (₹)</div>
+              <Input type="number" min="0" value={form.price} onChange={e=>setForm(f=>({...f, price:e.target.value}))} className="bg-ivory border-beige" data-testid="product-price-input" />
+            </div>
+          </div>
+
+          <div>
+            <div className="text-[10px] tracking-[0.2em] uppercase text-charcoal/50 mb-1">Description</div>
+            <Textarea value={form.description} onChange={e=>setForm(f=>({...f, description:e.target.value}))} className="bg-ivory border-beige min-h-[80px]" data-testid="product-description-input" />
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-3">
+            <div>
+              <div className="text-[10px] tracking-[0.2em] uppercase text-charcoal/50 mb-1">Material</div>
+              <Input value={form.material} onChange={e=>setForm(f=>({...f, material:e.target.value}))} className="bg-ivory border-beige" />
+            </div>
+            <div>
+              <div className="text-[10px] tracking-[0.2em] uppercase text-charcoal/50 mb-1">Dimensions</div>
+              <Input value={form.dimensions} onChange={e=>setForm(f=>({...f, dimensions:e.target.value}))} className="bg-ivory border-beige" />
+            </div>
+            <div>
+              <div className="text-[10px] tracking-[0.2em] uppercase text-charcoal/50 mb-1">Care</div>
+              <Input value={form.care} onChange={e=>setForm(f=>({...f, care:e.target.value}))} className="bg-ivory border-beige" />
+            </div>
+            <div>
+              <div className="text-[10px] tracking-[0.2em] uppercase text-charcoal/50 mb-1">Delivery</div>
+              <Input value={form.delivery} onChange={e=>setForm(f=>({...f, delivery:e.target.value}))} className="bg-ivory border-beige" />
+            </div>
+            <div>
+              <div className="text-[10px] tracking-[0.2em] uppercase text-charcoal/50 mb-1">Colours (comma-separated)</div>
+              <Input value={form.colors} onChange={e=>setForm(f=>({...f, colors:e.target.value}))} placeholder="Ivory, Beige" className="bg-ivory border-beige" data-testid="product-colors-input" />
+            </div>
+            <div>
+              <div className="text-[10px] tracking-[0.2em] uppercase text-charcoal/50 mb-1">Sort order</div>
+              <Input type="number" value={form.sort_order} onChange={e=>setForm(f=>({...f, sort_order:e.target.value}))} className="bg-ivory border-beige" />
+            </div>
+          </div>
+
+          <div>
+            <div className="text-[10px] tracking-[0.2em] uppercase text-charcoal/50 mb-1">Images (one URL per line or comma-separated)</div>
+            <Textarea value={form.images} onChange={e=>setForm(f=>({...f, images:e.target.value}))} placeholder="/products/handbags/xxx.jpg" className="bg-ivory border-beige font-mono text-sm min-h-[70px]" data-testid="product-images-input" />
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-3">
+            <div>
+              <div className="text-[10px] tracking-[0.2em] uppercase text-charcoal/50 mb-1">{isEdit ? 'Current stock (read-only here)' : 'Initial stock qty'}</div>
+              <Input type="number" min="0" disabled={isEdit} value={form.stock_quantity} onChange={e=>setForm(f=>({...f, stock_quantity:e.target.value}))} className="bg-ivory border-beige disabled:opacity-60" data-testid="product-stock-input" />
+              {isEdit && <div className="text-[11px] text-charcoal/50 mt-1">Use the Stock button to adjust inventory.</div>}
+            </div>
+            <div>
+              <div className="text-[10px] tracking-[0.2em] uppercase text-charcoal/50 mb-1">Low-stock threshold</div>
+              <Input type="number" min="0" value={form.low_stock_threshold} onChange={e=>setForm(f=>({...f, low_stock_threshold:e.target.value}))} className="bg-ivory border-beige" />
+            </div>
+            <div className="flex flex-col gap-2 justify-end">
+              <label className="inline-flex items-center gap-2 text-sm text-charcoal/80">
+                <input type="checkbox" checked={form.is_active} onChange={e=>setForm(f=>({...f, is_active:e.target.checked}))} className="h-4 w-4 accent-[color:var(--sk-terracotta)]" data-testid="product-active-checkbox" />
+                Active (visible on storefront)
+              </label>
+              <label className="inline-flex items-center gap-2 text-sm text-charcoal/80">
+                <input type="checkbox" checked={form.is_new} onChange={e=>setForm(f=>({...f, is_new:e.target.checked}))} className="h-4 w-4 accent-[color:var(--sk-terracotta)]" />
+                Mark as “New”
+              </label>
+              <label className="inline-flex items-center gap-2 text-sm text-charcoal/80">
+                <input type="checkbox" checked={form.is_bestseller} onChange={e=>setForm(f=>({...f, is_bestseller:e.target.checked}))} className="h-4 w-4 accent-[color:var(--sk-terracotta)]" />
+                Bestseller
+              </label>
+            </div>
+          </div>
+
+          <DialogFooter className="mt-2">
+            <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
+            <Button disabled={busy} type="submit" className="rounded-full bg-terracotta hover:bg-[color:var(--sk-terracotta-dark)] text-white" data-testid="product-save-btn">
+              {busy ? 'Saving…' : (isEdit ? 'Save changes' : 'Create product')}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function StockDialog({ product, onClose, onSaved }) {
+  const [mode, setMode] = useState('delta') // 'delta' | 'set'
+  const [delta, setDelta] = useState(1)
+  const [absolute, setAbsolute] = useState(0)
+  const [reason, setReason] = useState('restock')
+  const [note, setNote] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [movements, setMovements] = useState([])
+
+  useEffect(() => {
+    if (!product) return
+    setMode('delta'); setDelta(1); setAbsolute(product.stockQuantity ?? 0)
+    setReason('restock'); setNote('')
+    fetch(`/api/admin/products/${product.id}/stock/movements`, { credentials: 'include' })
+      .then(r => r.json()).then(j => setMovements(j.movements || [])).catch(() => setMovements([]))
+  }, [product])
+
+  if (!product) return null
+
+  const submit = async (e) => {
+    e.preventDefault()
+    setBusy(true)
+    try {
+      const body = mode === 'set'
+        ? { mode: 'set', quantity: Number(absolute), reason, note }
+        : { mode: 'delta', delta: Number(delta), reason: (Number(delta) >= 0 ? (reason || 'restock') : (reason === 'restock' ? 'sale' : reason)), note }
+      const r = await fetch(`/api/admin/products/${product.id}/stock`, {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) { toast.error(j.error || 'Update failed'); return }
+      toast.success(`Stock updated · ${j.previousQuantity} → ${j.stockQuantity}`)
+      onSaved?.()
+    } finally { setBusy(false) }
+  }
+
+  return (
+    <Dialog open={!!product} onOpenChange={onClose}>
+      <DialogContent className="max-w-2xl bg-cream border-beige" data-testid="stock-dialog">
+        <DialogHeader>
+          <div className="text-[10px] tracking-[0.3em] uppercase text-terracotta">Inventory</div>
+          <DialogTitle className="font-serif text-2xl text-charcoal">{product.name}</DialogTitle>
+          <DialogDescription className="text-charcoal/70">
+            Current stock: <strong data-testid="stock-current-qty">{product.stockQuantity}</strong> · Low-stock threshold: {product.lowStockThreshold}
+          </DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={submit} className="space-y-4">
+          <div className="flex gap-2">
+            <Button type="button" variant={mode === 'delta' ? 'default' : 'outline'}
+                    onClick={() => setMode('delta')}
+                    className={`rounded-full ${mode === 'delta' ? 'bg-terracotta text-white hover:bg-[color:var(--sk-terracotta-dark)]' : ''}`}
+                    data-testid="stock-mode-delta">
+              <PackagePlus className="h-4 w-4 mr-2" /> Adjust (+/-)
+            </Button>
+            <Button type="button" variant={mode === 'set' ? 'default' : 'outline'}
+                    onClick={() => setMode('set')}
+                    className={`rounded-full ${mode === 'set' ? 'bg-terracotta text-white hover:bg-[color:var(--sk-terracotta-dark)]' : ''}`}
+                    data-testid="stock-mode-set">
+              <Boxes className="h-4 w-4 mr-2" /> Set exact
+            </Button>
+          </div>
+
+          {mode === 'delta' ? (
+            <div className="grid md:grid-cols-[auto_1fr_1fr] gap-3 items-end">
+              <div className="flex items-center gap-1">
+                <Button type="button" variant="outline" size="icon" onClick={() => setDelta(d => Number(d) - 1)} data-testid="stock-decrement">
+                  <Minus className="h-4 w-4" />
+                </Button>
+                <Input type="number" value={delta} onChange={e=>setDelta(e.target.value)} className="bg-ivory border-beige w-24 text-center" data-testid="stock-delta-input" />
+                <Button type="button" variant="outline" size="icon" onClick={() => setDelta(d => Number(d) + 1)} data-testid="stock-increment">
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+              <Select value={reason} onValueChange={setReason}>
+                <SelectTrigger className="h-10 bg-ivory border-beige" data-testid="stock-reason-select"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="restock">Restock</SelectItem>
+                  <SelectItem value="sale">Sale</SelectItem>
+                  <SelectItem value="return">Return</SelectItem>
+                  <SelectItem value="damage">Damage / loss</SelectItem>
+                  <SelectItem value="correction">Correction</SelectItem>
+                </SelectContent>
+              </Select>
+              <Input value={note} onChange={e=>setNote(e.target.value)} placeholder="Note (optional)" className="bg-ivory border-beige" data-testid="stock-note-input" />
+            </div>
+          ) : (
+            <div className="grid md:grid-cols-[1fr_1fr_1fr] gap-3 items-end">
+              <div>
+                <div className="text-[10px] tracking-[0.2em] uppercase text-charcoal/50 mb-1">New quantity</div>
+                <Input type="number" min="0" value={absolute} onChange={e=>setAbsolute(e.target.value)} className="bg-ivory border-beige" data-testid="stock-absolute-input" />
+              </div>
+              <Select value={reason} onValueChange={setReason}>
+                <SelectTrigger className="h-10 bg-ivory border-beige"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="correction">Correction</SelectItem>
+                  <SelectItem value="restock">Restock</SelectItem>
+                  <SelectItem value="damage">Damage / loss</SelectItem>
+                </SelectContent>
+              </Select>
+              <Input value={note} onChange={e=>setNote(e.target.value)} placeholder="Note (optional)" className="bg-ivory border-beige" />
+            </div>
+          )}
+
+          <DialogFooter className="flex-wrap gap-2">
+            <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
+            <Button disabled={busy} type="submit" className="rounded-full bg-charcoal hover:bg-black text-cream" data-testid="stock-save-btn">
+              {busy ? 'Updating…' : 'Update stock'}
+            </Button>
+          </DialogFooter>
+        </form>
+
+        {movements.length > 0 && (
+          <div className="mt-2 rounded-lg bg-ivory border border-beige p-3 max-h-64 overflow-y-auto" data-testid="stock-history">
+            <div className="text-[10px] tracking-[0.2em] uppercase text-charcoal/60 mb-2">Recent movements</div>
+            <ul className="space-y-1.5 text-sm">
+              {movements.slice(0, 20).map(m => (
+                <li key={m.id} className="flex items-center justify-between border-b border-beige/60 pb-1.5 last:border-0">
+                  <span className="text-charcoal/70">{fmt(m.created_at)} · <span className="uppercase tracking-widest text-[10px] text-charcoal/50">{m.reason}</span></span>
+                  <span className={`font-medium ${m.delta >= 0 ? 'text-sage-dark' : 'text-red-700'}`}>
+                    {m.delta >= 0 ? '+' : ''}{m.delta} → {m.resulting_quantity}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   )
 }
 

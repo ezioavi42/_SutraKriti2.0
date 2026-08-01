@@ -12,6 +12,7 @@ A production-ready, boutique-quality **Next.js 15 + MySQL** website for SutraKri
 - **UI** · Tailwind CSS + shadcn/ui + Framer Motion + Lucide icons
 - **Fonts** · Playfair Display (serif) + Cormorant Garamond (italic) + Inter (body) via `next/font/google`
 - **Database** · **MySQL / MariaDB** (no MongoDB dependency)
+- **Persisted product catalogue** · Products live in MySQL — full CRUD from the admin dashboard, with stock quantity, low-stock threshold and an inventory audit trail on every adjustment
 - **Payments** · Razorpay (fully gated behind env flag — disabled by default, WhatsApp fallback)
 - **Custom-order enquiries** · Saved to MySQL **and** emailed to the studio via SMTP (Nodemailer)
 - **Product image pipeline** · Manual folder drop + `/api/upload` token-protected endpoint + CLI helper
@@ -142,13 +143,18 @@ All routes are under **`/api`**. Every response is JSON. CORS is permissive by d
 Returns `{ ok, db, mail }` — handy for uptime checks and to confirm SMTP config.
 
 ### `GET /api/products`
-Returns the static catalogue from `lib/products.js`:
+Returns the live catalogue from MySQL (only `is_active = 1` rows), ordered by
+`sort_order`:
 ```json
-{ "products": [ { "id": "p-tote-terracotta", "name": "...", "price": 2499, ... } ] }
+{ "products": [ { "id": "p-tote-cream", "name": "…", "price": 2299,
+                  "stockQuantity": 10, "lowStockThreshold": 3, … } ] }
 ```
+Legacy fields (`image`, `images`, `colors`, `new`, `bestseller`) are preserved
+so the storefront needs no changes. The row is also enriched with `isActive`,
+`stockQuantity`, `lowStockThreshold`, `sortOrder`, `createdAt`, `updatedAt`.
 
 ### `GET /api/products/:id`
-Single product by id — `404` if missing.
+Single product by id — `404` if missing or inactive.
 
 ### `POST /api/custom-order`
 Custom enquiry. Body:
@@ -217,10 +223,85 @@ Login sets an httpOnly HMAC-signed cookie (`sk_admin`, 7-day expiry). Every
 | `/api/admin/contacts` | GET | Contact-form messages |
 | `/api/admin/newsletter` | GET | Newsletter subscribers |
 | `/api/admin/payments` | GET | Razorpay payments |
+| `/api/admin/products` | GET | List every product (active + hidden), including stock |
+| `/api/admin/products` | POST | Create a product · body: JSON with `name` (required), `category`, `price`, `description`, `material`, `dimensions`, `care`, `delivery`, `colors[]`, `images[]`, `isNew`, `isBestseller`, `isActive`, `stockQuantity`, `lowStockThreshold`, `sortOrder`. `id` is optional (auto-slugified from `name`). |
+| `/api/admin/products/:id` | GET / PATCH / DELETE | Fetch, update (partial), or hard-delete a product. `PATCH` ignores `stockQuantity` — use the stock endpoint. `DELETE` cascades to `inventory_movements`. |
+| `/api/admin/products/:id/stock` | POST | Adjust inventory. Body: `{ mode: "delta" \| "set", delta?: number, quantity?: number, reason?: "restock" \| "sale" \| "return" \| "damage" \| "correction", note?: string }`. Response returns `{ previousQuantity, delta, stockQuantity }`. Negative deltas are refused if they would drive stock below zero. |
+| `/api/admin/products/:id/stock/movements` | GET | Recent stock movements (last 100) for an audit trail. |
 
 **Dashboard UI** lives at **`/admin`** and shares the boutique design language — warm cream palette, serif headings, quiet motion.
 
 > Access it via `https://<your-domain>/admin` (or `http://localhost:3000/admin` in dev). Use the password from `ADMIN_PASSWORD` in `.env`. Rotate the password by changing `ADMIN_PASSWORD` (and optionally `ADMIN_SESSION_SECRET`) and restarting.
+
+---
+
+## 🧶 Managing products & inventory
+
+Products are now **persisted in MySQL** (table `products`) instead of the
+static `lib/products.js` file. The static file remains only as a seed source
+for first-run installations — after seeding, the admin dashboard is the
+single source of truth.
+
+### From the admin dashboard (recommended)
+
+1. Sign in at `/admin` with `ADMIN_PASSWORD`.
+2. Open the **Products** tab.
+3. **Create** — click *New product*, fill the form (name is required; `id`
+   is auto-slugified from name if omitted), set optional images (one URL
+   per line — use the Uploads tab first if you need hosted paths), tick
+   *Active* to show it on the storefront.
+4. **Edit** — click *Edit* on any row. All fields except `stockQuantity`
+   are editable here. Toggle *Active* to hide/show without deleting.
+5. **Delete** — the trash icon deletes the row **and** its inventory
+   history. This is destructive; confirm carefully.
+6. **Inventory** — click *Stock* on any row to:
+   - Adjust `+/-` (with a reason: restock / sale / return / damage /
+     correction) — attempts to go below zero are rejected.
+   - *Set exact* — override to a specific integer.
+   - View the last 20 movements inline.
+
+Overview stat cards surface totals, `active`, total on-hand stock,
+low-stock count and out-of-stock count so the studio can act quickly.
+
+### Programmatically
+
+```bash
+# List all products (admin view — includes hidden rows)
+curl -s -b sk_admin=<cookie> $BASE/api/admin/products
+
+# Create a product
+curl -X POST -b sk_admin=<cookie> -H 'Content-Type: application/json' \
+  $BASE/api/admin/products \
+  -d '{"name":"Amber Clutch","category":"Handbags","price":1499,
+       "stockQuantity":8,"lowStockThreshold":2,
+       "images":["/products/handbags/amber.jpg"],"colors":["Amber","Ivory"]}'
+
+# Restock (delta +10)
+curl -X POST -b sk_admin=<cookie> -H 'Content-Type: application/json' \
+  $BASE/api/admin/products/amber-clutch/stock \
+  -d '{"mode":"delta","delta":10,"reason":"restock","note":"July batch"}'
+
+# Sell one unit
+curl -X POST -b sk_admin=<cookie> -H 'Content-Type: application/json' \
+  $BASE/api/admin/products/amber-clutch/stock \
+  -d '{"mode":"delta","delta":-1,"reason":"sale"}'
+
+# Correct to an absolute value
+curl -X POST -b sk_admin=<cookie> -H 'Content-Type: application/json' \
+  $BASE/api/admin/products/amber-clutch/stock \
+  -d '{"mode":"set","quantity":12,"reason":"correction","note":"annual audit"}'
+```
+
+### Seeding & migration
+
+- On first request, `productsDb.seedProductsIfEmpty()` copies every entry
+  from `lib/products.js` into the `products` table (starting stock: `10`
+  per product, low-stock threshold: `3`).
+- `node scripts/init-db.js` performs the same seeding and is safe to
+  re-run (it only seeds when the table is empty).
+- To add fresh seed data, either use the dashboard, the API, or add rows
+  to `lib/products.js` **before** the first request and re-run
+  `init-db.js` on an empty DB.
 
 ---
 
@@ -230,6 +311,8 @@ Auto-created on first request; also via `node scripts/init-db.js`.
 
 | Table | Purpose |
 |---|---|
+| `products` | **Persisted product catalogue** — name, price, category, description, JSON `images` / `colors`, flags (`is_new`, `is_bestseller`, `is_active`), `stock_quantity` + `low_stock_threshold`, and `sort_order`. Managed via the admin dashboard **Products** tab or the `/api/admin/products` endpoints. |
+| `inventory_movements` | **Append-only stock audit trail**. Every stock change (via API or the dashboard) writes a row with `delta`, `reason` (`restock` / `sale` / `return` / `damage` / `correction` / `initial` / `set`), `note` and the resulting `stock_quantity`. FK → `products.id` (cascade delete). |
 | `custom_orders` | Bespoke enquiries from the Custom Order modal |
 | `contacts` | Contact-form submissions |
 | `newsletter` | Email subscribers (email is PK) |
@@ -361,7 +444,7 @@ curl -s -X POST http://localhost:3000/api/newsletter \
 ## 🧠 Design decisions
 
 - **Single client `page.js`** — keeps motion, state and section composition co-located; simpler to audit for an MVP. Sub-components can later graduate to `components/` when they need reuse.
-- **Static product catalogue in `lib/products.js`** — avoids the overhead of an admin CMS for the MVP. A DB-backed catalogue can be layered in without touching the frontend contract.
+- **Products persisted in MySQL** — the `products` + `inventory_movements` tables replace the static `lib/products.js` catalogue. `lib/products.js` remains as a first-run seed source only. Manage everything from the `/admin` **Products** tab.
 - **Payment gating** — the whole checkout is safe to ship with keys missing. The UX degrades gracefully to a pre-filled WhatsApp message.
 - **Email + DB together** — double-writing custom orders (DB + email) guarantees the studio never misses an enquiry, even if one channel fails.
 - **No MongoDB** — MySQL is more familiar in shared-hosting environments like MilesWeb and easier to back up.

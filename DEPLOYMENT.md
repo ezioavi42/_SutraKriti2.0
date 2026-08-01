@@ -182,9 +182,12 @@ Submit a test custom-order from the site → you should receive the styled email
 ### Manual (fastest)
 cPanel → **File Manager** → `~/sutrakriti/public/products/<category>/` (one of
 `handbags`, `potli-bags`, `flowers`, `home-decor`, `uncategorised`) → upload
-your `.webp` / `.jpg` files. Update the matching `image` / `images` URL in
-`lib/products.js` (`/products/<category>/<file>`) and redeploy
-(`git pull && yarn build && restart`).
+your `.webp` / `.jpg` files.
+
+Because product data now lives in **MySQL** (see §17 below), you no longer need
+to edit `lib/products.js`. Instead, open `/admin` → **Products** → *Edit* the
+row and paste the image URL (`/products/<category>/<file>`) into the *Images*
+box. Save. No redeploy required.
 
 ### API (remote)
 ```bash
@@ -298,7 +301,36 @@ CMD ["node", "server.js"]
 
 ---
 
-## 17. Support contacts
+## 17. Managing products & inventory (production)
+
+Products are stored in the `products` table; stock changes are audited in
+`inventory_movements`. To administer the catalogue in production:
+
+1. Log in at `https://<your-domain>/admin` with the `ADMIN_PASSWORD` from
+   `.env`.
+2. Open the **Products** tab.
+3. Use *New product*, *Edit*, *Delete* and *Stock* buttons directly. No
+   SSH or redeploy is required — every action writes to MySQL and reflects
+   on the storefront immediately.
+4. Overview stat cards surface totals, low-stock and out-of-stock counts.
+
+Recommended production hardening:
+
+- Take nightly `mysqldump` backups (see §12) so `products` and
+  `inventory_movements` are recoverable.
+- Rotate `ADMIN_PASSWORD` after any staff change; the `sk_admin` cookie is
+  HMAC-signed against `ADMIN_SESSION_SECRET` (fall-through: `ADMIN_PASSWORD`).
+- If you migrate from a pre-persistence install, `node scripts/init-db.js`
+  (safe to re-run) creates the new tables **and** seeds from the legacy
+  `lib/products.js` file if the table is empty.
+
+For the full API surface (list / create / update / delete / stock adjust /
+movement history), see the *Managing products & inventory* section of the
+main [`README.md`](./README.md).
+
+---
+
+## 18. Support contacts
 
 - **MilesWeb support**: <https://www.milesweb.in/support>
 - **Razorpay integration issues**: <https://razorpay.com/support/>

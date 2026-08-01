@@ -10,7 +10,7 @@ from io import BytesIO
 from PIL import Image
 
 # Load base URL from .env
-BASE_URL = "https://premium-threads-332.preview.emergentagent.com/api"
+BASE_URL = "https://stock-admin-panel-2.preview.emergentagent.com/api"
 ADMIN_PASSWORD = "sutrakriti-admin-dev"
 UPLOAD_TOKEN = "sutrakriti-dev-upload-token"
 

@@ -66,8 +66,82 @@ async function main() {
       size_bytes INT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    `CREATE TABLE IF NOT EXISTS products (
+      id VARCHAR(64) PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      category VARCHAR(128),
+      price INT NOT NULL DEFAULT 0,
+      description TEXT,
+      material VARCHAR(255),
+      dimensions VARCHAR(255),
+      care VARCHAR(255),
+      delivery VARCHAR(128),
+      colors TEXT,
+      images TEXT,
+      is_new TINYINT(1) NOT NULL DEFAULT 0,
+      is_bestseller TINYINT(1) NOT NULL DEFAULT 0,
+      is_active TINYINT(1) NOT NULL DEFAULT 1,
+      stock_quantity INT NOT NULL DEFAULT 0,
+      low_stock_threshold INT NOT NULL DEFAULT 3,
+      sort_order INT NOT NULL DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX(category),
+      INDEX(is_active),
+      INDEX(sort_order)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    `CREATE TABLE IF NOT EXISTS inventory_movements (
+      id VARCHAR(64) PRIMARY KEY,
+      product_id VARCHAR(64) NOT NULL,
+      delta INT NOT NULL,
+      reason VARCHAR(64) NOT NULL,
+      note TEXT,
+      resulting_quantity INT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      INDEX(product_id),
+      INDEX(created_at),
+      CONSTRAINT fk_inv_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
   ]
   for (const s of statements) await conn.query(s)
+
+  // Seed products table from the legacy static catalogue if empty.
+  const [countRows] = await conn.query('SELECT COUNT(*) AS n FROM products')
+  if (Number(countRows?.[0]?.n || 0) === 0) {
+    let legacy = []
+    try {
+      const fs = require('fs'); const p = require('path')
+      const src = fs.readFileSync(p.join(__dirname, '..', 'lib', 'products.js'), 'utf8')
+      // Strip export keyword and evaluate as CommonJS.
+      const cjs = src.replace(/export\s+const\s+PRODUCTS\s*=/, 'const PRODUCTS =') + '\nmodule.exports = { PRODUCTS };'
+      // eslint-disable-next-line no-new-func
+      const mod = { exports: {} }
+      new Function('module', 'exports', cjs)(mod, mod.exports)
+      legacy = mod.exports.PRODUCTS || []
+    } catch (e) { console.warn('[init-db] could not parse legacy catalogue:', e.message) }
+
+    let order = 0
+    for (const p of legacy) {
+      const images = p.images && p.images.length ? p.images : (p.image ? [p.image] : [])
+      const colors = Array.isArray(p.colors) ? p.colors : []
+      await conn.query(
+        `INSERT INTO products
+           (id, name, category, price, description, material, dimensions, care, delivery,
+            colors, images, is_new, is_bestseller, is_active, stock_quantity, low_stock_threshold, sort_order)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 10, 3, ?)
+         ON DUPLICATE KEY UPDATE name=VALUES(name)`,
+        [
+          p.id, p.name, p.category || null, Number(p.price) || 0,
+          p.description || null, p.material || null, p.dimensions || null,
+          p.care || null, p.delivery || null,
+          JSON.stringify(colors), JSON.stringify(images),
+          p.new ? 1 : 0, p.bestseller ? 1 : 0, order++,
+        ]
+      )
+    }
+    console.log(`✓ Seeded ${legacy.length} products from legacy catalogue.`)
+  }
+
   console.log(`✓ Database '${dbName}' ready with all tables.`)
   await conn.end()
 }

@@ -5,7 +5,10 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { query, initSchema } from '@/lib/db'
 import { sendMail, renderCustomOrderEmail, renderOrderAcceptanceEmail, renderCustomerAcknowledgementEmail, isMailConfigured } from '@/lib/mailer'
-import { PRODUCTS } from '@/lib/products'
+import {
+  listProducts, getProduct, createProduct, updateProduct, deleteProduct,
+  adjustStock, listStockMovements, seedProductsIfEmpty,
+} from '@/lib/productsDb'
 import { toSlug, CATEGORY_SLUGS, UNCATEGORISED } from '@/lib/categories'
 
 export const runtime = 'nodejs'
@@ -137,13 +140,14 @@ async function handleRoute(request, { params }) {
       return ok({ message: 'SutraKriti API — Every thread tells a story.' })
     }
 
-    // Products (from static catalogue)
+    // Products (persisted in MySQL)
     if (route === '/products' && method === 'GET') {
-      return ok({ products: PRODUCTS })
+      const products = await listProducts()
+      return ok({ products })
     }
     if (route.startsWith('/products/') && method === 'GET') {
       const id = route.split('/')[2]
-      const product = PRODUCTS.find(p => p.id === id)
+      const product = await getProduct(id)
       if (!product) return err('not found', 404)
       return ok({ product })
     }
@@ -231,7 +235,7 @@ async function handleRoute(request, { params }) {
     // Razorpay create order (gated on env keys)
     if (route === '/razorpay/order' && method === 'POST') {
       const body = await request.json()
-      const product = PRODUCTS.find(p => p.id === body.productId)
+      const product = await getProduct(body.productId)
       if (!product) return err('product not found', 404)
 
       const keyId = process.env.RAZORPAY_KEY_ID
@@ -325,10 +329,19 @@ async function handleRoute(request, { params }) {
               SUM(status='completed') AS completed
             FROM custom_orders`),
         ])
+        await seedProductsIfEmpty()
         const [uploads] = await query('SELECT COUNT(*) AS n FROM uploads').then(r => [r])
         const [subs]    = await query('SELECT COUNT(*) AS n FROM newsletter').then(r => [r])
         const [contacts]= await query('SELECT COUNT(*) AS n FROM contacts').then(r => [r])
         const [payments]= await query(`SELECT COUNT(*) AS n, COALESCE(SUM(status='paid'),0) AS paid FROM payments`).then(r => [r])
+        const [productsAgg] = await query(
+          `SELECT COUNT(*) AS total,
+                  COALESCE(SUM(is_active),0) AS active,
+                  COALESCE(SUM(stock_quantity),0) AS total_stock,
+                  COALESCE(SUM(stock_quantity = 0),0) AS out_of_stock,
+                  COALESCE(SUM(stock_quantity > 0 AND stock_quantity <= low_stock_threshold),0) AS low_stock
+             FROM products`
+        ).then(r => [r?.[0] || {}])
         const recent = await query('SELECT id, name, product_type, occasion, status, created_at FROM custom_orders ORDER BY created_at DESC LIMIT 5')
         return ok({
           orders: orders?.[0] || { total: 0, pending: 0, accepted: 0, completed: 0 },
@@ -336,6 +349,13 @@ async function handleRoute(request, { params }) {
           newsletter: Number(subs?.[0]?.n || 0),
           contacts: Number(contacts?.[0]?.n || 0),
           payments: payments?.[0] || { n: 0, paid: 0 },
+          products: {
+            total: Number(productsAgg.total || 0),
+            active: Number(productsAgg.active || 0),
+            totalStock: Number(productsAgg.total_stock || 0),
+            outOfStock: Number(productsAgg.out_of_stock || 0),
+            lowStock: Number(productsAgg.low_stock || 0),
+          },
           recent,
         })
       }
@@ -448,6 +468,75 @@ async function handleRoute(request, { params }) {
       if (route === '/admin/payments' && method === 'GET') {
         const rows = await query('SELECT * FROM payments ORDER BY created_at DESC LIMIT 500')
         return ok({ payments: rows })
+      }
+
+      // ---------------- Products CRUD ----------------
+      if (route === '/admin/products' && method === 'GET') {
+        const products = await listProducts({ includeInactive: true })
+        return ok({ products })
+      }
+      if (route === '/admin/products' && method === 'POST') {
+        const body = await request.json().catch(() => ({}))
+        try {
+          const product = await createProduct(body)
+          return ok({ ok: true, product }, 201)
+        } catch (e) {
+          return err(e.message || 'create failed', e.status || 500)
+        }
+      }
+      const mProdOne = route.match(/^\/admin\/products\/([^/]+)$/)
+      if (mProdOne) {
+        const id = mProdOne[1]
+        if (method === 'GET') {
+          const product = await getProduct(id, { includeInactive: true })
+          if (!product) return err('product not found', 404)
+          return ok({ product })
+        }
+        if (method === 'PATCH' || method === 'PUT') {
+          const body = await request.json().catch(() => ({}))
+          try {
+            const product = await updateProduct(id, body)
+            return ok({ ok: true, product })
+          } catch (e) {
+            return err(e.message || 'update failed', e.status || 500)
+          }
+        }
+        if (method === 'DELETE') {
+          try {
+            const r = await deleteProduct(id)
+            return ok(r)
+          } catch (e) {
+            return err(e.message || 'delete failed', e.status || 500)
+          }
+        }
+      }
+
+      // ---------------- Inventory ----------------
+      const mStock = route.match(/^\/admin\/products\/([^/]+)\/stock$/)
+      if (mStock && method === 'POST') {
+        const id = mStock[1]
+        const body = await request.json().catch(() => ({}))
+        const mode = (body.mode === 'set') ? 'set' : 'delta'
+        const qty = mode === 'set'
+          ? Number(body.quantity)
+          : Number(body.delta ?? body.quantity)
+        if (!Number.isFinite(qty)) return err('quantity or delta required', 400)
+        try {
+          const r = await adjustStock(id, qty, {
+            mode,
+            reason: body.reason || (mode === 'set' ? 'set' : (qty >= 0 ? 'restock' : 'sale')),
+            note: body.note || null,
+          })
+          return ok({ ok: true, ...r })
+        } catch (e) {
+          return err(e.message || 'stock update failed', e.status || 500, e.detail || {})
+        }
+      }
+      const mMoves = route.match(/^\/admin\/products\/([^/]+)\/stock\/movements$/)
+      if (mMoves && method === 'GET') {
+        const id = mMoves[1]
+        const rows = await listStockMovements(id, 100)
+        return ok({ movements: rows })
       }
 
       return err(`Admin route ${route} not found`, 404)
