@@ -52,6 +52,246 @@ A production-ready, boutique-quality **Next.js 15 + MySQL** website for SutraKri
 
 ---
 
+## 🏛️ Architecture
+
+SutraKriti is a single-service Next.js 15 application that co-locates the
+storefront (React), the admin dashboard and the JSON API in one process.
+State lives in MySQL/MariaDB; images live on the filesystem under
+`public/products/`; outbound integrations (SMTP + Razorpay) are optional
+and gated by env vars.
+
+### System overview
+
+```mermaid
+flowchart LR
+    subgraph Client["🖥️ Browser"]
+        Store["Storefront<br/>app/page.js"]
+        Admin["Admin Dashboard<br/>app/admin/page.js"]
+    end
+
+    subgraph NextApp["▲ Next.js 15 (single process, port 3000)"]
+        UI["React (RSC + Client)<br/>shadcn/ui · Framer Motion"]
+        API["API catch-all route<br/>app/api/[[...path]]/route.js"]
+        Lib["Data-access layer<br/>lib/productsDb.js · lib/db.js<br/>lib/mailer.js"]
+    end
+
+    subgraph Storage["💾 Persistence"]
+        DB[("MariaDB / MySQL<br/>db: sutrakriti")]
+        FS["Filesystem<br/>public/products/&lt;category&gt;/"]
+    end
+
+    subgraph External["🌐 External (gated)"]
+        SMTP["SMTP<br/>Nodemailer"]
+        RZP["Razorpay<br/>Checkout + Webhook HMAC"]
+    end
+
+    Store -->|HTTPS| UI
+    Admin -->|HTTPS · sk_admin cookie| UI
+    UI --> API
+    Admin -->|/api/admin/*<br/>cookie required| API
+    Store -->|/api/products<br/>/api/custom-order<br/>/api/newsletter| API
+    API --> Lib
+    Lib -->|mysql2 pool| DB
+    API -->|/api/upload<br/>write & read| FS
+    API -.->|POST /api/custom-order| SMTP
+    API -.->|POST /api/razorpay/*| RZP
+
+    classDef ext fill:#F7F1E5,stroke:#B76A4B,stroke-dasharray:5 3
+    class SMTP,RZP ext
+```
+
+> On the Emergent preview pod, an extra `socat` proxy forwards
+> `:8001 → :3000` so the ingress (which routes `/api/*` to `8001`)
+> reaches the Next.js API. Production (MilesWeb / Vercel) exposes port
+> 3000 directly.
+
+### End-to-end product lifecycle
+
+The single most important flow — how a product goes from studio intent to
+storefront visibility — spans the DB, admin dashboard and public API.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Studio as 👩‍🎨 Studio (Admin)
+    participant AdminUI as Admin UI<br/>/admin
+    participant API as Next.js API
+    participant DB as MySQL
+    participant Store as Storefront<br/>/
+    actor Shopper as 🛍️ Shopper
+
+    Note over Studio,DB: (1) Create product
+    Studio->>AdminUI: click "New product"
+    AdminUI->>API: POST /api/admin/products<br/>{ name, price, images, stockQuantity, … }
+    API->>DB: INSERT products (id auto-slug)
+    API->>DB: INSERT inventory_movements (delta=+stock, reason='initial')
+    API-->>AdminUI: 201 { product }
+
+    Note over Studio,DB: (2) Adjust stock
+    Studio->>AdminUI: click "Stock" → delta -3, reason='sale'
+    AdminUI->>API: POST /api/admin/products/:id/stock<br/>{ mode:'delta', delta:-3 }
+    API->>DB: BEGIN
+    API->>DB: SELECT … FOR UPDATE (row lock)
+    API->>DB: UPDATE products SET stock_quantity=?
+    API->>DB: INSERT inventory_movements
+    API->>DB: COMMIT
+    API-->>AdminUI: 200 { previousQuantity, delta, stockQuantity }
+
+    Note over Store,Shopper: (3) Shopper browses
+    Shopper->>Store: GET /
+    Store->>API: GET /api/products
+    API->>DB: SELECT * FROM products WHERE is_active=1<br/>ORDER BY sort_order
+    API-->>Store: 200 { products[] }
+    Store-->>Shopper: rendered gallery + stock badges
+
+    Note over Shopper,DB: (4) Purchase (gated)
+    Shopper->>Store: click "Buy Now"
+    Store->>API: POST /api/razorpay/order<br/>{ productId }
+    API->>DB: SELECT product · INSERT payments
+    API-->>Store: { keyId, orderId, amount }
+    Store->>Shopper: Razorpay Checkout
+    Shopper->>API: POST /api/razorpay/verify<br/>{ signature }
+    API->>DB: UPDATE payments SET status='paid'
+```
+
+### Admin authentication (HMAC cookie)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Admin as 🔑 Admin
+    participant UI as /admin (React)
+    participant API as Next.js API
+    participant Env as .env
+
+    Admin->>UI: enter ADMIN_PASSWORD
+    UI->>API: POST /api/admin/login<br/>{ password }
+    API->>Env: read ADMIN_PASSWORD, ADMIN_SESSION_SECRET
+    API->>API: sign token<br/>HMAC-SHA256(timestamp, secret)
+    API-->>UI: Set-Cookie: sk_admin=<ts>.<sig><br/>HttpOnly · SameSite=Lax · 7d
+    UI->>API: GET /api/admin/me (cookie)
+    API->>API: verify signature + age ≤ 7d<br/>timingSafeEqual
+    alt valid
+        API-->>UI: 200 { authenticated:true }
+        UI-->>Admin: Dashboard
+    else invalid/expired
+        API-->>UI: 401
+        UI-->>Admin: Login card
+    end
+```
+
+### Persistence — ER diagram
+
+```mermaid
+erDiagram
+    products ||--o{ inventory_movements : "records"
+    products {
+        VARCHAR(64) id PK "slug or provided id"
+        VARCHAR(255) name
+        VARCHAR(128) category
+        INT price "in ₹, integer"
+        TEXT description
+        VARCHAR material
+        VARCHAR dimensions
+        VARCHAR care
+        VARCHAR delivery
+        TEXT colors "JSON array"
+        TEXT images "JSON array"
+        TINYINT is_new
+        TINYINT is_bestseller
+        TINYINT is_active
+        INT stock_quantity
+        INT low_stock_threshold
+        INT sort_order
+        DATETIME created_at
+        DATETIME updated_at
+    }
+    inventory_movements {
+        VARCHAR(64) id PK
+        VARCHAR(64) product_id FK
+        INT delta "signed"
+        VARCHAR(64) reason "restock|sale|return|damage|correction|initial|set"
+        TEXT note
+        INT resulting_quantity
+        DATETIME created_at
+    }
+    custom_orders {
+        VARCHAR(64) id PK
+        VARCHAR name
+        VARCHAR contact
+        VARCHAR email
+        VARCHAR product_type
+        VARCHAR status "new|accepted|completed"
+        DATETIME created_at
+    }
+    contacts { VARCHAR(64) id PK }
+    newsletter { VARCHAR(255) email PK }
+    payments {
+        VARCHAR(64) id PK
+        VARCHAR product_id
+        INT amount "paise"
+        VARCHAR razorpay_order_id
+        VARCHAR status "created|paid|failed"
+    }
+    uploads {
+        VARCHAR(64) id PK
+        VARCHAR filename
+        VARCHAR category
+        INT size_bytes
+    }
+```
+
+### Inventory-adjust state machine
+
+Illustrates the guard rails `POST /api/admin/products/:id/stock` enforces,
+including the transactional oversell check.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Locking : POST /stock (mode: delta|set)
+    Locking --> Validating : SELECT … FOR UPDATE
+    Validating --> Rejected : mode=delta AND next < 0
+    Validating --> Rejected : mode=set AND qty < 0
+    Validating --> Rejected : quantity not finite
+    Validating --> Writing : ok
+    Writing --> Audited : UPDATE products.stock_quantity
+    Audited --> Committed : INSERT inventory_movements
+    Committed --> [*] : 200 { previous, delta, stockQuantity }
+    Rejected --> [*] : 400 insufficient_stock / bad_request
+```
+
+### Request routing & module map
+
+```mermaid
+flowchart TB
+    Req(("HTTP request")) --> Route["app/api/[[...path]]/route.js<br/>catch-all handler"]
+    Route -->|"GET /api/products"| ProdList["listProducts()"]
+    Route -->|"POST /api/admin/products"| ProdCreate["createProduct()"]
+    Route -->|"PATCH /api/admin/products/:id"| ProdUpdate["updateProduct()"]
+    Route -->|"DELETE /api/admin/products/:id"| ProdDelete["deleteProduct()"]
+    Route -->|"POST /api/admin/products/:id/stock"| Stock["adjustStock()"]
+    Route -->|"GET /api/admin/products/:id/stock/movements"| Moves["listStockMovements()"]
+    Route -->|"POST /api/custom-order"| Order["INSERT custom_orders<br/>+ renderCustomOrderEmail()"]
+    Route -->|"POST /api/upload"| Upload["fs.writeFile → public/products/&lt;cat&gt;/<br/>+ INSERT uploads"]
+
+    ProdList --> ProductsDb["lib/productsDb.js"]
+    ProdCreate --> ProductsDb
+    ProdUpdate --> ProductsDb
+    ProdDelete --> ProductsDb
+    Stock --> ProductsDb
+    Moves --> ProductsDb
+    ProductsDb --> DbLib["lib/db.js<br/>mysql2 pool"]
+    Order --> DbLib
+    Order --> Mailer["lib/mailer.js<br/>Nodemailer"]
+    DbLib --> MySQL[("MySQL")]
+
+    classDef highlight fill:#B76A4B,color:#fff,stroke:#8F4E36
+    class ProductsDb,Stock highlight
+```
+
+---
+
 ## 🔐 Environment variables
 
 All config lives in `.env`. Copy `.env.example`-style values from below and adjust for your environment.
