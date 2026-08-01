@@ -7,7 +7,7 @@ out
 .DS_Store
 
 # uploaded product images — keep the folder structure & READMEs, ignore binaries
-public/products/**/*
+!public/products/**/*
 !public/products/**/README.md
 !public/products/**/.gitkeep
 !public/products/README.md
