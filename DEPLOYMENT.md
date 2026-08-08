@@ -2,14 +2,14 @@
 
 This guide walks you through a **production deployment of SutraKriti** on a MilesWeb **Node.js Hosting** subscription plan, from account setup to a live URL with MySQL, SMTP and Razorpay wired in.
 
-> Tested against MilesWeb’s cPanel-based Node.js selector (Passenger). The exact UI labels may drift; the flow is the same.
+> This guide is written for MilesWeb’s **mPanel** workflow. If your hosting plan uses slightly different wording, the equivalent sections are usually named **Node.js App**, **Environment Variables**, **Domain**, and **SSL**.
 
 ---
 
 ## 0. Prerequisites
 
-- A MilesWeb hosting plan that includes **Node.js Selector** and **MySQL** (Business / Startup / Node.js plans all qualify).
-- SSH access enabled on your account (MilesWeb → cPanel → “SSH Access”).
+- A MilesWeb hosting plan that includes **Node.js hosting** and **MySQL** (Business / Startup / Node.js plans all qualify).
+- SSH access enabled on your account if your plan provides it; otherwise use the built-in file manager or Git deployment options.
 - A domain pointed to MilesWeb name-servers.
 - A local copy of this repository.
 - Your **Razorpay** keys (optional) and **SMTP** credentials for outbound email.
@@ -18,9 +18,9 @@ This guide walks you through a **production deployment of SutraKriti** on a Mile
 
 ## 1. Create the MySQL database
 
-1. Log into cPanel → **MySQL® Databases**.
+1. Log into MilesWeb mPanel and open the **MySQL / Database** section.
 2. Create a database, e.g. `youracct_sutrakriti`.
-3. Create a database user with a strong password and **Add User To Database**, granting **ALL PRIVILEGES**.
+3. Create a database user with a strong password and add that user to the database, granting **ALL PRIVILEGES**.
 4. Note the following — you’ll need them shortly:
    - `MYSQL_HOST` — usually `localhost` on shared MilesWeb; on VPS it may be `127.0.0.1` or a private IP.
    - `MYSQL_PORT` — `3306`.
@@ -30,16 +30,16 @@ This guide walks you through a **production deployment of SutraKriti** on a Mile
 
 ---
 
-## 2. Create the Node.js application in cPanel
+## 2. Create the Node.js application in mPanel
 
-1. cPanel → **Setup Node.js App** → **Create Application**.
+1. Open the MilesWeb mPanel hosting area for your site and create or edit the **Node.js application**.
 2. Set:
    - **Node.js version**: `20.x` (or the latest available; 18+ works).
    - **Application mode**: `Production`.
-   - **Application root**: `sutrakriti` (creates `/home/youracct/sutrakriti/`).
+   - **Application root**: the folder that contains `package.json`, for example `/public_html/_SutraKriti2.0` or `/public_html/your-domain/sutrakriti`.
    - **Application URL**: your domain / subdomain (e.g. `www.sutrakriti.com`).
-   - **Application startup file**: `node_modules/next/dist/bin/next` — or leave blank for now and set it after step 4.
-3. Click **Create**. MilesWeb generates a virtualenv-style Node environment and shows a “Enter to the virtual environment” command — copy it, you’ll need it below.
+   - **Startup command**: `node server.js` (set this after you add the file in step 6).
+3. Save the app and note the app root path. If your mPanel exposes a terminal or SSH access, keep that information handy for the build step below.
 
 ---
 
@@ -55,7 +55,7 @@ git clone https://github.com/<your-org>/sutrakriti.git .
 ```
 
 ### Option B — SFTP upload
-Upload the repo contents (skip `node_modules/`, `.next/`, `.env.local`) via FileZilla/Cyberduck into `~/sutrakriti/`.
+Upload the repo contents (skip `node_modules/`, `.next/`, `.env.local`) via FileZilla/Cyberduck into the app root you configured in mPanel, for example `~/public_html/_SutraKriti2.0/`.
 
 ---
 
@@ -101,7 +101,7 @@ BRAND_EMAIL=sutrakriti.help@outlook.com
 
 > ⚠️ **Never commit `.env` to git.** It contains secrets.
 
-Add them also in cPanel → Node.js App → **Environment variables** (some MilesWeb Passenger setups override `.env`; adding both is safe).
+Add them also in mPanel → **Environment Variables** for the Node.js app (some shared-hosting setups read the runtime variables from the panel, so adding both is safest).
 
 ### Configure the admin dashboard
 The admin UI lives at `/admin` and is protected by the password in `ADMIN_PASSWORD`.
@@ -113,18 +113,18 @@ ADMIN_PASSWORD=choose-a-strong-password
 ADMIN_SESSION_SECRET=generate-a-random-long-string
 ```
 
-- **Localhost**: set them before running `yarn dev`, then open `http://localhost:3000/admin` and sign in with `ADMIN_PASSWORD`.
-- **MilesWeb production**: add the same values in cPanel → Node.js App → **Environment variables**, then click **Restart**. After the app restarts, open `https://your-domain/admin` and sign in with the same password.
+- **Localhost**: set them before running `npm run dev`, then open `http://localhost:3000/admin` and sign in with `ADMIN_PASSWORD`.
+- **MilesWeb production**: add the same values in mPanel → **Environment Variables** for the Node.js app, then restart the app. After the app restarts, open `https://your-domain/admin` and sign in with the same password.
 - If login fails, confirm the password matches exactly and that the app was restarted so the new environment variables are picked up.
 
 ---
 
 ## 5. Install & build
 
-From the SSH session, enter the Node virtual environment (the command shown in step 2), then:
+From the SSH session (or the mPanel terminal if available), go to your app root and run:
 
 ```bash
-cd ~/sutrakriti
+cd ~/public_html/_SutraKriti2.0
 npm install
 node scripts/init-db.js                    # creates all MySQL tables (safe to re-run)
 npm run build                              # produces .next/ production bundle
@@ -171,8 +171,9 @@ app.prepare().then(() => {
 
 > Use `node server.js` as the startup command in MilesWeb. The app should be deployed at the project root, and the `.env` file should contain the MySQL and admin environment variables before you start it.
 
-In MilesWeb mPanel → Node.js App / Application settings, set:
+In MilesWeb mPanel → your Node.js app settings, set:
 - **Startup command**: `node server.js`
+- **Application root**: the folder that contains `package.json` and `server.js`
 - Click **Restart**.
 
 > Alternative: keep the built-in Next start script (`node_modules/next/dist/bin/next`) with argument `start`. Both work; `server.js` is more portable and is the recommended option for this project.
@@ -181,15 +182,13 @@ In MilesWeb mPanel → Node.js App / Application settings, set:
 
 ## 7. Point the domain
 
-cPanel → **Domains** → make sure `www.sutrakriti.com` **Document Root** points to the Node.js proxy generated by the Node.js App (usually `~/sutrakriti/public`). MilesWeb’s Node.js Selector wires this automatically for the primary domain assigned to the app.
-
-If you’re using a **subdomain** (e.g. `shop.sutrakriti.com`), create it under **Domains** first, then re-open the Node.js App and re-select the domain.
+mPanel → **Domain / Domains** → make sure your live domain is assigned to the Node.js app and that the app URL points to the correct domain/subdomain. If you are using a **subdomain** (e.g. `shop.sutrakriti.com`), create it in the domain section first, then re-open the Node.js app settings and re-select the domain.
 
 ---
 
 ## 8. Enable HTTPS
 
-cPanel → **SSL/TLS Status** → select the domain → **Run AutoSSL**. MilesWeb issues a Let’s Encrypt cert within minutes.
+mPanel → **SSL / HTTPS** → select the domain → enable or renew the certificate. MilesWeb will issue a Let’s Encrypt certificate within minutes.
 
 Update `NEXT_PUBLIC_BASE_URL` in `.env` to the `https://` version if not already.
 
@@ -212,7 +211,7 @@ Submit a test custom-order from the site → you should receive the styled email
 ## 10. Uploading product images (production)
 
 ### Manual (fastest)
-cPanel → **File Manager** → `~/sutrakriti/public/products/<category>/` (one of
+mPanel → **File Manager** → the app root’s `public/products/<category>/` folder (one of
 `handbags`, `potli-bags`, `flowers`, `home-decor`, `uncategorised`) → upload
 your `.webp` / `.jpg` files.
 
@@ -244,7 +243,7 @@ a category, drop your files. Auth is your `sk_admin` cookie — no token exposed
 ## 11. Enabling Razorpay in production
 
 1. In Razorpay Dashboard → **Account & Settings → API Keys**, generate **Live** keys.
-2. In cPanel → Node.js App → Environment variables:
+2. In mPanel → **Environment Variables** for the Node.js app:
    ```
    RAZORPAY_KEY_ID=rzp_live_...
    RAZORPAY_KEY_SECRET=...
@@ -280,7 +279,7 @@ git pull --ff-only
 yarn install --frozen-lockfile
 yarn build
 ```
-Then cPanel → Node.js App → **Restart**.
+Then restart the Node.js app from mPanel.
 
 ---
 
@@ -290,7 +289,7 @@ Then cPanel → Node.js App → **Restart**.
 git log --oneline -5
 git checkout <previous-sha>
 yarn build
-# restart via cPanel
+# restart via mPanel
 ```
 MySQL migrations are additive; no rollback DDL needed for this project.
 

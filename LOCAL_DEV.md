@@ -123,7 +123,7 @@ ADMIN_SESSION_SECRET=change-me-random-long-string
 After the app is running, open `http://localhost:3000/admin` and sign in with the password from `ADMIN_PASSWORD`.
 
 - The login endpoint is `/api/admin/login` and it sets the `sk_admin` cookie for the dashboard.
-- For a production-style test, you can also set the same `ADMIN_PASSWORD` and `ADMIN_SESSION_SECRET` values in the MilesWeb cPanel Node.js App environment variables and restart the app.
+- For a production-style test, you can also set the same `ADMIN_PASSWORD` and `ADMIN_SESSION_SECRET` values in the MilesWeb mPanel Node.js app environment variables and restart the app.
 
 ### 4.4 Install & bootstrap
 ```bash
