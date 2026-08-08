@@ -51,6 +51,16 @@ function cors(res) {
   res.headers.set('Access-Control-Allow-Credentials', 'true')
   return res
 }
+function isDbConnectionError(error) {
+  const msg = `${error?.code || ''} ${error?.message || ''}`.toLowerCase()
+  return ['ecconrefused', 'econnreset', 'er_bad_db_error', 'er_dbaccess_denied_error', 'er_no_db_error', 'access denied', 'unknown database', 'connect'].some(k => msg.includes(k))
+}
+function dbUnavailableResponse(error) {
+  return err('database_unavailable', 503, {
+    message: 'The database connection is currently unavailable. Check that MariaDB/MySQL is running and that the MYSQL_* or DB_* environment variables are correct.',
+    detail: error?.message || 'Unknown database error',
+  })
+}
 export async function OPTIONS() {
   return cors(new NextResponse(null, { status: 200 }))
 }
@@ -129,11 +139,42 @@ async function handleRoute(request, { params }) {
   const isProductDetail = route.startsWith('/products/')
 
   try {
+    let dbInitError = null
     if (!(dbOptional.has(route) || isProductDetail)) {
-      await initSchema()
+      try {
+        await initSchema()
+      } catch (e) {
+        if (isDbConnectionError(e)) {
+          dbInitError = e
+        } else {
+          throw e
+        }
+      }
     } else {
       // best-effort schema init; ignore failure
-      try { await initSchema() } catch (e) { console.warn('[api] initSchema deferred:', e?.code || e?.message) }
+      try {
+        await initSchema()
+      } catch (e) {
+        console.warn('[api] initSchema deferred:', e?.code || e?.message)
+        if (isDbConnectionError(e)) dbInitError = e
+      }
+    }
+
+    const authOnlyAdmin = new Set(['/admin/login', '/admin/logout', '/admin/me'])
+    const needsDb = !authOnlyAdmin.has(route) && (
+      route.startsWith('/admin/') ||
+      route === '/products' ||
+      route.startsWith('/products/') ||
+      route === '/custom-order' ||
+      route === '/contact' ||
+      route === '/newsletter' ||
+      route === '/upload' ||
+      route === '/health' ||
+      route === '/razorpay/order' ||
+      route === '/razorpay/verify'
+    )
+    if (dbInitError && needsDb) {
+      return dbUnavailableResponse(dbInitError)
     }
 
     if (route === '/' && method === 'GET') {
@@ -300,7 +341,9 @@ async function handleRoute(request, { params }) {
       if (!body.password || body.password !== expected) return err('invalid_credentials', 401)
       const token = signAdminToken()
       const res = ok({ ok: true })
-      const isHttps = (process.env.NEXT_PUBLIC_BASE_URL || '').startsWith('https://')
+      const requestUrl = new URL(request.url)
+      const forwardedProto = request.headers.get('x-forwarded-proto') || ''
+      const isHttps = requestUrl.protocol === 'https:' || forwardedProto.toLowerCase() === 'https'
       res.headers.set('Set-Cookie',
         `${ADMIN_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${ADMIN_MAX_AGE}${isHttps ? '; Secure' : ''}`
       )

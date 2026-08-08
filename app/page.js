@@ -22,9 +22,9 @@ const EMAIL = 'sutrakriti.help@outlook.com'
 const CATEGORIES = ['All', 'Handbags', 'Potli Bags', 'Flowers', 'Home Decor']
 
 const GALLERY = [
-  { src: 'https://images.pexels.com/photos/10820406/pexels-photo-10820406.jpeg', h: 460 },
+  { src: '/products/potli-bags/1785704321354-31e278e6-bag4.png', h: 360 },
   { src: 'https://images.unsplash.com/photo-1645516956968-dee62f4a9090', h: 360 },
-  { src: 'https://images.pexels.com/photos/30224898/pexels-photo-30224898.jpeg', h: 520 },
+  { src: '/products/handbags/1785703835516-0fab7167-img-8892.png', h: 520 },
   { src: 'https://images.pexels.com/photos/20269075/pexels-photo-20269075.jpeg', h: 380 },
   { src: 'https://images.unsplash.com/photo-1571434976902-a6e3e1eb0d51', h: 440 },
   { src: 'https://images.pexels.com/photos/32452334/pexels-photo-32452334.jpeg', h: 400 },
@@ -32,7 +32,6 @@ const GALLERY = [
   { src: 'https://images.unsplash.com/photo-1560347964-838d2f63cdc0', h: 340 },
   { src: 'https://images.pexels.com/photos/18971489/pexels-photo-18971489.jpeg', h: 500 },
   { src: 'https://images.pexels.com/photos/36238478/pexels-photo-36238478.jpeg', h: 420 },
-  { src: 'https://images.unsplash.com/photo-1510284876186-b1a84b94418f', h: 380 },
 ]
 
 const REVIEWS = [
@@ -499,7 +498,9 @@ function StorySection() {
 }
 
 function Collections({ products, onView }) {
-  const featured = products.slice(0, 6)
+  const featured = products
+    .filter((p) => p.bestseller || p.new)
+    .slice(0, 6)
   return (
     <section id="collections" className="relative py-24 md:py-32 bg-ivory">
       <div className="container">
