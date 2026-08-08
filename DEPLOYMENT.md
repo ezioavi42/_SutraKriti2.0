@@ -102,6 +102,20 @@ BRAND_EMAIL=sutrakriti.help@outlook.com
 
 Add them also in cPanel → Node.js App → **Environment variables** (some MilesWeb Passenger setups override `.env`; adding both is safe).
 
+### Configure the admin dashboard
+The admin UI lives at `/admin` and is protected by the password in `ADMIN_PASSWORD`.
+
+Add these values to your local `.env` file and to the MilesWeb Node.js App environment variables:
+
+```env
+ADMIN_PASSWORD=choose-a-strong-password
+ADMIN_SESSION_SECRET=generate-a-random-long-string
+```
+
+- **Localhost**: set them before running `yarn dev`, then open `http://localhost:3000/admin` and sign in with `ADMIN_PASSWORD`.
+- **MilesWeb production**: add the same values in cPanel → Node.js App → **Environment variables**, then click **Restart**. After the app restarts, open `https://your-domain/admin` and sign in with the same password.
+- If login fails, confirm the password matches exactly and that the app was restarted so the new environment variables are picked up.
+
 ---
 
 ## 5. Install & build

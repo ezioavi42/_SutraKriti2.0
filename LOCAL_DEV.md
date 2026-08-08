@@ -115,9 +115,17 @@ MYSQL_DATABASE=sutrakriti
 WHATSAPP_NUMBER=917777932385
 UPLOAD_TOKEN=sutrakriti-dev-upload-token
 NEXT_PUBLIC_BUY_NOW_ENABLED=false
+ADMIN_PASSWORD=change-me-strong-password
+ADMIN_SESSION_SECRET=change-me-random-long-string
 ```
 
-### 4.3 Install & bootstrap
+### 4.3 Access the admin dashboard
+After the app is running, open `http://localhost:3000/admin` and sign in with the password from `ADMIN_PASSWORD`.
+
+- The login endpoint is `/api/admin/login` and it sets the `sk_admin` cookie for the dashboard.
+- For a production-style test, you can also set the same `ADMIN_PASSWORD` and `ADMIN_SESSION_SECRET` values in the MilesWeb cPanel Node.js App environment variables and restart the app.
+
+### 4.4 Install & bootstrap
 ```bash
 yarn install
 node scripts/init-db.js       # creates all tables
