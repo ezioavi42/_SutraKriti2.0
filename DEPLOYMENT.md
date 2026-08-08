@@ -70,6 +70,7 @@ CORS_ORIGINS=https://www.sutrakriti.com
 # MySQL
 MYSQL_HOST=localhost
 MYSQL_PORT=3306
+MYSQL_SOCKET=/var/lib/mysql/mysql.sock
 MYSQL_USER=youracct_sk
 MYSQL_PASSWORD=your-strong-password
 MYSQL_DATABASE=youracct_sutrakriti

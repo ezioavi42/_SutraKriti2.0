@@ -5,13 +5,21 @@ require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') }
 
 async function main() {
   const mysql = require('mysql2/promise')
-  const conn = await mysql.createConnection({
-    host: process.env.MYSQL_HOST || '127.0.0.1',
-    port: Number(process.env.MYSQL_PORT || 3306),
-    user: process.env.MYSQL_USER || 'root',
-    password: process.env.MYSQL_PASSWORD || '',
+  const socketPath = process.env.MYSQL_SOCKET || process.env.DB_SOCKET || ''
+  const connectionConfig = {
+    user: process.env.MYSQL_USER || process.env.DB_USER || 'root',
+    password: process.env.MYSQL_PASSWORD || process.env.DB_PASSWORD || '',
     multipleStatements: true,
-  })
+  }
+
+  if (socketPath) {
+    connectionConfig.socketPath = socketPath
+  } else {
+    connectionConfig.host = process.env.MYSQL_HOST || process.env.DB_HOST || '127.0.0.1'
+    connectionConfig.port = Number(process.env.MYSQL_PORT || process.env.DB_PORT || 3306)
+  }
+
+  const conn = await mysql.createConnection(connectionConfig)
   const dbName = process.env.MYSQL_DATABASE || 'sutrakriti'
   await conn.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`)
   await conn.changeUser({ database: dbName })
