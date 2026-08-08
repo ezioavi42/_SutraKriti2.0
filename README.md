@@ -473,7 +473,7 @@ Login sets an httpOnly HMAC-signed cookie (`sk_admin`, 7-day expiry). Every
 
 > Access it via `https://<your-domain>/admin` (or `http://localhost:3000/admin` in dev). Use the password from `ADMIN_PASSWORD` in `.env`.
 >
-> For local development, set `ADMIN_PASSWORD` and `ADMIN_SESSION_SECRET` in your local `.env` before running the app. For MilesWeb production, add the same variables in the cPanel Node.js App **Environment variables** section and restart the app so the admin login starts working.
+> For local development, set `ADMIN_PASSWORD` and `ADMIN_SESSION_SECRET` in your local `.env` before running the app. For MilesWeb production, add the same variables in the MilesWeb mPanel Node.js application environment variables section and restart the app so the admin login starts working.
 
 ---
 

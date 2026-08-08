@@ -1,5 +1,9 @@
 const nextConfig = {
   output: 'standalone',
+  experimental: {
+    workerThreads: false,
+    cpus: 1,
+  },
   images: {
     unoptimized: true,
     remotePatterns: [

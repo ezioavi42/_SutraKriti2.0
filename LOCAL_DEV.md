@@ -136,7 +136,7 @@ node scripts/init-db.js       # creates all tables
 ## 5. Run the dev server
 
 ```bash
-yarn dev                       # http://localhost:3000
+npm run dev                       # http://localhost:3000
 ```
 
 Hot-reload is enabled. Any change under `app/`, `components/`, `lib/` or `public/`
@@ -271,10 +271,10 @@ mysql -usutrakriti -psutrakriti_dev_pw sutrakriti \
 ## 11. Useful commands
 
 ```bash
-yarn dev            # dev server (hot reload)
-yarn build          # production build
-yarn start          # start the production build
-yarn lint           # eslint
+npm run dev            # dev server (hot reload)
+npm run build          # production build
+npm start              # start the production build
+```
 
 node scripts/init-db.js                # (re)create MySQL schema + seed products
 bash scripts/setup-local.sh            # one-shot setup

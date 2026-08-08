@@ -125,40 +125,57 @@ From the SSH session, enter the Node virtual environment (the command shown in s
 
 ```bash
 cd ~/sutrakriti
-yarn install --frozen-lockfile           # or: npm ci
+npm install
 node scripts/init-db.js                    # creates all MySQL tables (safe to re-run)
-yarn build                                 # produces .next/ production bundle
+npm run build                              # produces .next/ production bundle
 ```
 
 The build should end with `Compiled successfully`.
 
+> On shared hosting such as MilesWeb, the build can fail with `spawn ... node EAGAIN` if Next.js tries to use too many workers. The project now limits build concurrency in `next.config.js`, but if you still see this error, run the build again in the app directory after a short pause.
+
 ---
 
-## 6. Configure the startup file
+## 6. Configure the startup command
 
-MilesWeb’s Passenger runs one “startup file”. Create `server.js` at the project root (only for production):
+MilesWeb’s Node app runner needs a startup command. In mPanel or the Node app settings, set:
+
+```bash
+node server.js
+```
+
+Create `server.js` at the project root (only for production):
 
 ```js
-// server.js — production entry for MilesWeb Passenger
+// server.js — production entry for MilesWeb mPanel / Node.js app
 const { createServer } = require('http')
 const { parse } = require('url')
 const next = require('next')
 
-const port = process.env.PORT || 3000
-const app = next({ dev: false })
+const port = Number(process.env.PORT || 3000)
+const hostname = process.env.HOSTNAME || '0.0.0.0'
+const app = next({ dev: false, hostname })
 const handle = app.getRequestHandler()
 
 app.prepare().then(() => {
-  createServer((req, res) => handle(req, res, parse(req.url, true)))
-    .listen(port, () => console.log(`▲ SutraKriti ready on ${port}`))
+  const server = createServer((req, res) => {
+    const parsedUrl = parse(req.url, true)
+    handle(req, res, parsedUrl)
+  })
+
+  server.listen(port, hostname, () => {
+    console.log(`▲ SutraKriti ready on http://${hostname}:${port}`)
+  })
 })
 ```
 
-In cPanel → Node.js App, set:
-- **Application startup file**: `server.js`
+> Use `node server.js` as the startup command in MilesWeb. The app should be deployed at the project root, and the `.env` file should contain the MySQL and admin environment variables before you start it.
+
+In MilesWeb mPanel → Node.js App / Application settings, set:
+- **Startup command**: `node server.js`
 - Click **Restart**.
 
-> Alternative: keep the built-in Next start script (`node_modules/next/dist/bin/next`) with argument `start`. Both work; `server.js` is more portable.
+> Alternative: keep the built-in Next start script (`node_modules/next/dist/bin/next`) with argument `start`. Both work; `server.js` is more portable and is the recommended option for this project.
 
 ---
 
