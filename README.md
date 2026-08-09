@@ -486,6 +486,15 @@ single source of truth.
 
 ### From the admin dashboard (recommended)
 
+If you want to bring the current local catalogue into production, use the dedicated sync helper in [scripts/sync-products.js](scripts/sync-products.js):
+
+```bash
+node scripts/sync-products.js --dry-run
+node scripts/sync-products.js
+```
+
+Set `SOURCE_MYSQL_*` values for the local database source and keep `MYSQL_*` values for the production database target.
+
 1. Sign in at `/admin` with `ADMIN_PASSWORD`.
 2. Open the **Products** tab.
 3. **Create** — click *New product*, fill the form (name is required; `id`

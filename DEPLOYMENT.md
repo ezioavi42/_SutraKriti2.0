@@ -208,7 +208,62 @@ Submit a test custom-order from the site → you should receive the styled email
 
 ---
 
-## 10. Uploading product images (production)
+## 10. Syncing the product catalogue to production
+
+If you already have a complete product catalogue in your local development database and want to copy it into the production MySQL database, the safest path is to use a one-off sync script rather than trying to recreate rows manually.
+
+### Recommended workflow
+
+1. Export the local catalogue from your development MySQL database (or use the existing local database directly if you can reach it from the server).
+2. Set the source and target connection variables in the server environment.
+3. Run the sync script from the app root:
+
+```bash
+# dry run first
+node scripts/sync-products.js --dry-run
+
+# then run the real sync
+node scripts/sync-products.js
+```
+
+### Environment variables
+
+For the source database (local or another host), set:
+
+```env
+SOURCE_MYSQL_HOST=127.0.0.1
+SOURCE_MYSQL_PORT=3306
+SOURCE_MYSQL_SOCKET=/run/mysqld/mysqld.sock
+SOURCE_MYSQL_USER=your_source_user
+SOURCE_MYSQL_PASSWORD=your_source_password
+SOURCE_MYSQL_DATABASE=your_source_db
+```
+
+For the target production database, keep using the normal production values:
+
+```env
+MYSQL_HOST=localhost
+MYSQL_PORT=3306
+MYSQL_SOCKET=/run/mysqld/mysqld.sock
+MYSQL_USER=your_prod_user
+MYSQL_PASSWORD=your_prod_password
+MYSQL_DATABASE=your_prod_db
+```
+
+### Notes
+
+- The sync script updates matching product IDs and leaves the production database otherwise intact.
+- If you want to remove any products that no longer exist in the source database, run:
+
+```bash
+node scripts/sync-products.js --delete-missing
+```
+
+- This is safer than manually inserting rows because it preserves the current production schema and avoids duplicate IDs.
+
+---
+
+## 11. Uploading product images (production)
 
 ### Manual (fastest)
 mPanel → **File Manager** → the app root’s `public/products/<category>/` folder (one of
