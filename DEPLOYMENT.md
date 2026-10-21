@@ -125,10 +125,17 @@ From the SSH session (or the mPanel terminal if available), go to your app root 
 
 ```bash
 cd ~/public_html/_SutraKriti2.0
-npm install
+yarn install --frozen-lockfile
 node scripts/init-db.js                    # creates all MySQL tables (safe to re-run)
-npm run build                              # produces .next/ production bundle
+yarn build                                 # produces .next/ production bundle
 ```
+
+Run these commands from the Git app root (the directory containing `package.json`
+and `yarn.lock`), not its parent. Verify `git rev-parse --show-toplevel` points
+to this directory and `node -p "require('next/package.json').version"` reports
+the version pinned by `package.json` (currently `15.5.23`). A parent-level
+`package-lock.json` or `node_modules` can otherwise cause the wrong Next.js
+version to be used.
 
 The build should end with `Compiled successfully`.
 Keep `sharp` installed as a production dependency and ensure the app can write

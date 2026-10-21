@@ -4,6 +4,7 @@ const nextConfig = {
     workerThreads: false,
     cpus: 1,
   },
+  turbopack: {},
   images: {
     formats: ['image/webp'],
     minimumCacheTTL: 86400,
