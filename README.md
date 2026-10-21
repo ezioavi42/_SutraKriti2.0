@@ -439,10 +439,18 @@ Verifies HMAC signature. On success → marks `payments.status = 'paid'`.
 Upload a product image. Multipart form-data, single `file` field.
 - **Auth**: header `x-upload-token: <UPLOAD_TOKEN>`.
 - **Limits**: 8 MB, MIME `image/jpeg|png|webp|avif|gif`.
-- Saves to `public/products/<timestamp>-<slug>.<ext>`.
+- JPEG, PNG, WebP, and AVIF uploads are resized to fit 1600 × 2000 and saved
+  as WebP (quality 82); GIF files are kept unchanged to preserve animation.
+- Saves to `public/products/<category>/<timestamp>-<slug>.webp` (or `.gif`).
 - Records metadata in `uploads` table.
 
-Response: `{ ok, id, filename, url, size, mime }` (url is public, e.g. `/products/172...jpg`).
+Response: `{ ok, id, filename, url, size, mime }` (url is public, e.g.
+`/api/media/handbags/172...webp`). The media endpoint serves uploaded files
+directly from `UPLOAD_DIR`, including files added after build time; relative
+`UPLOAD_DIR` values resolve from the app root in regular and standalone Next.js
+deployments. The storefront uses responsive Next.js image optimization for local
+assets and configured Unsplash/Pexels/avatar hosts; unknown external hosts remain
+compatible but are not transformed.
 
 ### Admin (auth-protected)
 
@@ -585,12 +593,18 @@ public/products/
 ├── potli-bags/        # Category: Potli Bags
 ├── flowers/           # Category: Flowers
 ├── home-decor/        # Category: Home Decor
+├── accessories/       # Category: Accessories
 ├── uncategorised/     # Uploaded without a category
 └── README.md
 ```
 
-The canonical category list lives in `lib/categories.js`. Files are served
-publicly at `/products/<category-slug>/<file>`.
+The canonical category list lives in `lib/categories.js`. The admin upload and
+product forms and storefront category filters read from this list, and uploads
+create the category folder automatically. To add a future category, add its
+display name and URL slug there; no UI list or database migration is needed.
+Manual static files are served at `/products/<category-slug>/<file>`. Uploaded
+files are served at `/api/media/<category-slug>/<file>` so runtime uploads work
+without rebuilding Next.js.
 
 ### Four ways to add images
 
@@ -620,6 +634,11 @@ publicly at `/products/<category-slug>/<file>`.
 
 Recommended: **1200 × 1500 px (4:5)** portrait, WebP or high-quality JPEG under
 500 KB, colour-graded warm.
+
+The admin/API/CLI upload path normalizes supported non-GIF images automatically.
+Images placed manually by SFTP should also be resized and compressed before
+upload. Next.js serves optimized responsive WebP variants; keep the app's
+`.next/cache/images` directory writable so generated variants can be cached.
 
 ### Auth for the upload endpoint
 

@@ -14,12 +14,14 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Badge } from '@/components/ui/badge'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { toast, Toaster } from 'sonner'
+import { CATEGORIES as PRODUCT_CATEGORIES } from '@/lib/categories'
+import SiteImage from '@/components/site-image'
 
 const WHATSAPP_NUMBER = '917777932385'
 const IG_URL = 'https://www.instagram.com/_sutrakriti'
 const EMAIL = 'sutrakriti.help@outlook.com'
 
-const CATEGORIES = ['All', 'Handbags', 'Potli Bags', 'Flowers', 'Home Decor']
+const CATEGORIES = ['All', ...PRODUCT_CATEGORIES.map(category => category.name)]
 
 const GALLERY = [
   { src: '/products/potli-bags/1785704321354-31e278e6-bag4.png', h: 360 },
@@ -137,9 +139,11 @@ function MorphingWord() {
 function BrandLogo({ className = '', showText = false }) {
   return (
     <span className={`inline-flex items-center gap-2 ${className}`}>
-      <img
+      <SiteImage
         src="/brand/sutrakriti-logo.png"
         alt="SutraKriti — handcrafted crochet"
+        width={240}
+        height={100}
         className="w-auto h-full object-contain"
         draggable={false}
       />
@@ -312,7 +316,14 @@ function Hero({ onOpenCustom }) {
 
         <motion.div style={{ rotateX: rx, rotateY: ry }} className="md:col-span-5 relative aspect-[4/5] md:aspect-[3/4]">
           <motion.div style={{ x: px, y: py }} className="absolute inset-0 rounded-[2rem] overflow-hidden shadow-[0_40px_80px_-20px_rgba(109,76,54,0.35)] ring-1 ring-black/5">
-            <img src="https://images.unsplash.com/photo-1539215398023-f3ac3405795f?w=1200&q=85" alt="Handcrafted crochet yarn arrangement" className="w-full h-full object-cover" />
+            <SiteImage
+              src="https://images.unsplash.com/photo-1539215398023-f3ac3405795f?w=1200&q=85"
+              alt="Handcrafted crochet yarn arrangement"
+              fill
+              priority
+              sizes="(max-width: 768px) 100vw, 42vw"
+              className="object-cover"
+            />
             <div className="absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent" />
             <div className="absolute bottom-5 left-5 right-5 flex items-center justify-between text-white">
               <div>
@@ -428,9 +439,11 @@ function PhilosophySection() {
             <div className="absolute inset-0 rounded-full" style={{
               background: 'radial-gradient(circle at 50% 45%, rgba(251,247,238,0.9), rgba(233,221,199,0.5) 70%, transparent 90%)'
             }} />
-            <img
+            <SiteImage
               src="/brand/sutrakriti-logo.png"
               alt="SutraKriti mandala"
+              width={800}
+              height={800}
               className="absolute inset-6 md:inset-10 w-[calc(100%-3rem)] md:w-[calc(100%-5rem)] h-[calc(100%-3rem)] md:h-[calc(100%-5rem)] object-contain drop-shadow-[0_20px_40px_rgba(109,76,54,0.25)]"
             />
             {/* Tiny sparkles orbiting (client-only to avoid float-point hydration mismatch) */}
@@ -480,15 +493,15 @@ function StorySection() {
         </motion.div>
 
         <div className="md:col-span-7 space-y-8">
-          <motion.div initial={{ opacity: 0, y: 40 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.8 }} className="rounded-[2rem] overflow-hidden aspect-[4/3] shadow-xl">
-            <img src="https://images.pexels.com/photos/36238478/pexels-photo-36238478.jpeg" alt="Artisan hands crocheting yarn" className="w-full h-full object-cover" />
+          <motion.div initial={{ opacity: 0, y: 40 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.8 }} className="relative rounded-[2rem] overflow-hidden aspect-[4/3] shadow-xl">
+            <SiteImage src="https://images.pexels.com/photos/36238478/pexels-photo-36238478.jpeg" alt="Artisan hands crocheting yarn" fill sizes="(max-width: 768px) 100vw, 55vw" className="object-cover" />
           </motion.div>
           <div className="grid grid-cols-2 gap-6">
-            <motion.div initial={{ opacity: 0, y: 40 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.8, delay: 0.1 }} className="rounded-[1.5rem] overflow-hidden aspect-[3/4]">
-              <img src="https://images.unsplash.com/photo-1648005539099-709d5be525fb?w=900&q=85" alt="Balls of yarn with wooden crochet hook resting on soft blanket" className="w-full h-full object-cover" />
+            <motion.div initial={{ opacity: 0, y: 40 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.8, delay: 0.1 }} className="relative rounded-[1.5rem] overflow-hidden aspect-[3/4]">
+              <SiteImage src="https://images.unsplash.com/photo-1648005539099-709d5be525fb?w=900&q=85" alt="Balls of yarn with wooden crochet hook resting on soft blanket" fill sizes="(max-width: 768px) 50vw, 28vw" className="object-cover" />
             </motion.div>
-            <motion.div initial={{ opacity: 0, y: 40 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.8, delay: 0.2 }} className="rounded-[1.5rem] overflow-hidden aspect-[3/4] mt-8">
-              <img src="https://images.pexels.com/photos/37540169/pexels-photo-37540169.jpeg?w=900" alt="Delicate crochet piece with wildflowers on floral fabric" className="w-full h-full object-cover" />
+            <motion.div initial={{ opacity: 0, y: 40 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.8, delay: 0.2 }} className="relative rounded-[1.5rem] overflow-hidden aspect-[3/4] mt-8">
+              <SiteImage src="https://images.pexels.com/photos/37540169/pexels-photo-37540169.jpeg?w=900" alt="Delicate crochet piece with wildflowers on floral fabric" fill sizes="(max-width: 768px) 50vw, 28vw" className="object-cover" />
             </motion.div>
           </div>
         </div>
@@ -521,7 +534,7 @@ function Collections({ products, onView }) {
               onClick={() => onView(p)}
               className={`luxury-card group relative overflow-hidden rounded-[1.75rem] bg-cream text-left w-full aspect-square ${i === 0 ? 'sm:col-span-2 md:col-span-4 md:row-span-2 md:aspect-[16/13]' : 'md:col-span-2'}`}
             >
-              <img src={p.image} alt={p.name} loading="lazy" decoding="async" className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.06]" />
+              <SiteImage src={p.image} alt={p.name} fill sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 60vw" className="object-cover transition-transform duration-500 group-hover:scale-[1.06]" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
               {p.bestseller && <Badge className="absolute top-4 left-4 bg-terracotta text-white border-0">Bestseller</Badge>}
               {p.new && <Badge className="absolute top-4 left-4 bg-sage text-white border-0">New</Badge>}
@@ -573,12 +586,12 @@ function Catalogue({ products, onView }) {
               className="group text-left"
             >
               <div className="relative overflow-hidden rounded-[1.25rem] aspect-[4/5] bg-beige">
-                <img
+                <SiteImage
                   src={p.image}
                   alt={p.name}
-                  loading="lazy"
-                  decoding="async"
-                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                  fill
+                  sizes="(max-width: 768px) 50vw, (max-width: 1200px) 25vw, 22vw"
+                  className="object-cover transition-transform duration-500 group-hover:scale-105"
                 />
                 <div className="absolute top-3 left-3 flex gap-1">
                   {p.new && <Badge className="bg-sage text-white border-0">New</Badge>}
@@ -636,7 +649,7 @@ function Personalisation({ onOpenCustom }) {
   return (
     <section className="relative py-24 md:py-32 overflow-hidden">
       <div className="absolute inset-0">
-        <img src="https://images.unsplash.com/photo-1571434976902-a6e3e1eb0d51?w=1600&q=85" alt="Handcrafted crochet" className="w-full h-full object-cover" />
+        <SiteImage src="https://images.unsplash.com/photo-1571434976902-a6e3e1eb0d51?w=1600&q=85" alt="Handcrafted crochet" fill sizes="100vw" className="object-cover" />
         <div className="absolute inset-0" style={{
           background: 'linear-gradient(115deg, rgba(247,241,229,0.96) 0%, rgba(247,241,229,0.92) 45%, rgba(233,221,199,0.78) 100%)'
         }} />
@@ -727,7 +740,7 @@ function Reviews() {
                 <div className="flex items-center gap-1 text-gold">{Array.from({length: REVIEWS[i].rating}).map((_, k) => <Star key={k} className="h-4 w-4 fill-current" />)}</div>
                 <p className="mt-4 font-serif text-2xl md:text-3xl leading-snug text-charcoal">“{REVIEWS[i].text}”</p>
                 <div className="mt-6 flex items-center gap-3">
-                  <img src={REVIEWS[i].avatar} alt={REVIEWS[i].name} className="h-11 w-11 rounded-full object-cover" />
+                  <SiteImage src={REVIEWS[i].avatar} alt={REVIEWS[i].name} width={44} height={44} className="h-11 w-11 rounded-full object-cover" />
                   <div>
                     <div className="text-sm text-charcoal">{REVIEWS[i].name}</div>
                     <div className="text-xs text-charcoal/50 tracking-wider uppercase">{REVIEWS[i].city}</div>
@@ -769,8 +782,9 @@ function Gallery() {
               transition={{ duration: 0.6, delay: (i % 6) * 0.04 }}
               onClick={() => setOpen(g.src)}
               className="group block w-full overflow-hidden rounded-2xl relative"
+              style={{ height: g.h }}
             >
-              <img src={g.src} alt="SutraKriti gallery" loading="lazy" decoding="async" style={{ height: g.h }} className="w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+              <SiteImage src={g.src} alt="SutraKriti gallery" fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover transition-transform duration-500 group-hover:scale-105" />
               <div className="absolute inset-0 bg-charcoal/0 group-hover:bg-charcoal/20 transition-colors" />
             </motion.button>
           ))}
@@ -778,7 +792,11 @@ function Gallery() {
       </div>
       <Dialog open={!!open} onOpenChange={() => setOpen(null)}>
         <DialogContent className="max-w-3xl bg-cream border-beige p-2">
-          {open && <img src={open} alt="Preview" className="w-full h-auto rounded-lg" />}
+          {open && (
+            <div className="relative w-full h-[min(80vh,800px)]">
+              <SiteImage src={open} alt="Preview" fill sizes="(max-width: 768px) 100vw, 768px" className="object-contain rounded-lg" />
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </section>
@@ -928,12 +946,13 @@ function ProductGallery({ images, name }) {
           role="img"
           aria-label={`${name} — image ${idx + 1} of ${list.length}`}
         >
-          <img
+          <SiteImage
             src={list[idx]}
             alt={`${name} — ${idx + 1}`}
+            fill
+            sizes="(max-width: 768px) 100vw, 50vw"
             draggable={false}
-            loading="eager"
-            className="w-full h-full object-cover pointer-events-none"
+            className="object-cover pointer-events-none"
           />
         </motion.div>
       </div>

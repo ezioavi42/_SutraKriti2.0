@@ -214,8 +214,13 @@ public/products/
 ├── potli-bags/
 ├── flowers/
 ├── home-decor/
+├── accessories/
 └── uncategorised/
 ```
+
+Category choices are defined in `lib/categories.js` and are shared by the
+admin upload/product forms and storefront filters. Add a category there once;
+the admin upload creates its image folder automatically.
 
 Four ways to add images:
 
@@ -228,7 +233,7 @@ curl -X POST http://localhost:3000/api/upload \
   -H "x-upload-token: sutrakriti-dev-upload-token" \
   -F "category=handbags" \
   -F "file=@./my-photo.jpg"
-# → { ok:true, url:"/products/handbags/1734...jpg", category:"handbags", ... }
+# → { ok:true, url:"/products/handbags/1734...webp", category:"handbags", ... }
 
 # 3. Drop files manually into the correct category folder — served instantly.
 
@@ -237,6 +242,10 @@ curl -X POST http://localhost:3000/api/upload \
 
 Once uploaded, open `/admin` → **Products** → *Edit* on the target row and
 paste the returned URL into the *Images* box.
+
+JPEG, PNG, WebP, and AVIF files uploaded through the API, CLI, or admin are
+normalized to WebP (maximum 1600 × 2000, quality 82); GIF animation is
+preserved. The storefront delivers responsive Next.js-optimized variants.
 
 ---
 

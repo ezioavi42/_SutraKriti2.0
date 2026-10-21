@@ -131,6 +131,10 @@ npm run build                              # produces .next/ production bundle
 ```
 
 The build should end with `Compiled successfully`.
+Keep `sharp` installed as a production dependency and ensure the app can write
+to `.next/cache/images`; Next.js uses this cache for responsive WebP variants.
+When deploying the standalone output, include the generated `.next` directory
+and the `public` directory as usual.
 
 > On shared hosting such as MilesWeb, the build can fail with `spawn ... node EAGAIN` if Next.js tries to use too many workers. The project now limits build concurrency in `next.config.js`, but if you still see this error, run the build again in the app directory after a short pause.
 
@@ -266,14 +270,20 @@ node scripts/sync-products.js --delete-missing
 ## 11. Uploading product images (production)
 
 ### Manual (fastest)
-mPanel → **File Manager** → the app root’s `public/products/<category>/` folder (one of
-`handbags`, `potli-bags`, `flowers`, `home-decor`, `uncategorised`) → upload
-your `.webp` / `.jpg` files.
+mPanel → **File Manager** → the app root’s `public/products/<category>/` folder
+(for example `handbags`, `potli-bags`, `flowers`, `home-decor`, `accessories`,
+or `uncategorised`) → upload your `.webp` / `.jpg` files. Admin uploads create
+folders automatically for categories registered in `lib/categories.js`.
+Files uploaded through the admin, API, or CLI are resized to fit 1600 × 2000
+and converted to WebP (quality 82); GIF animation is preserved. For manual SFTP
+uploads, resize/compress images before placing them in the folder. The storefront
+uses Next.js responsive image optimization and caches generated variants under
+`.next/cache/images`, so that directory must remain writable and persistent.
 
 Because product data now lives in **MySQL** (see §17 below), you no longer need
 to edit `lib/products.js`. Instead, open `/admin` → **Products** → *Edit* the
-row and paste the image URL (`/products/<category>/<file>`) into the *Images*
-box. Save. No redeploy required.
+row and paste the image URL (`/api/media/<category>/<file>` for new admin
+uploads) into the *Images* box. Save. No redeploy required.
 
 ### API (remote)
 ```bash

@@ -3,7 +3,9 @@ import { v4 as uuidv4 } from 'uuid'
 import crypto from 'crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import sharp from 'sharp'
 import { query, initSchema } from '@/lib/db'
+import { getUploadRoot } from '@/lib/upload-storage'
 import { sendMail, renderCustomOrderEmail, renderOrderAcceptanceEmail, renderCustomerAcknowledgementEmail, isMailConfigured } from '@/lib/mailer'
 import {
   listProducts, getProduct, createProduct, updateProduct, deleteProduct,
@@ -102,31 +104,48 @@ async function handleUpload(request) {
   const mime = file.type || 'application/octet-stream'
   if (!allowed.includes(mime)) return err(`unsupported mime type: ${mime}`, 415)
 
-  const buf = Buffer.from(await file.arrayBuffer())
-  if (buf.byteLength > 8 * 1024 * 1024) return err('file too large (max 8 MB)', 413)
+  const sourceBuffer = Buffer.from(await file.arrayBuffer())
+  if (sourceBuffer.byteLength > 8 * 1024 * 1024) return err('file too large (max 8 MB)', 413)
 
-  const uploadRoot = process.env.UPLOAD_DIR || 'public/products'
-  const absRoot = path.isAbsolute(uploadRoot) ? uploadRoot : path.join(process.cwd(), uploadRoot)
+  let buf = sourceBuffer
+  let outputMime = mime
+  let ext = (path.extname(file.name || 'image') || '.jpg').toLowerCase()
+  try {
+    const metadata = await sharp(sourceBuffer).metadata()
+    if (!metadata.width || !metadata.height) return err('invalid image', 400)
+    if (mime !== 'image/gif') {
+      buf = await sharp(sourceBuffer)
+        .rotate()
+        .resize({ width: 1600, height: 2000, fit: 'inside', withoutEnlargement: true })
+        .webp({ quality: 82, effort: 4 })
+        .toBuffer()
+      outputMime = 'image/webp'
+      ext = '.webp'
+    }
+  } catch {
+    return err('invalid or unsupported image', 400)
+  }
+
+  const absRoot = getUploadRoot()
   const absDir = path.join(absRoot, catSlug)
   await fs.mkdir(absDir, { recursive: true })
 
   const original = file.name || 'image'
-  const ext = (path.extname(original) || '.jpg').toLowerCase()
   const base = slugify(path.basename(original, path.extname(original))) || 'image'
   const filename = `${Date.now()}-${crypto.randomBytes(4).toString('hex')}-${base}${ext}`
   const abs = path.join(absDir, filename)
   await fs.writeFile(abs, buf)
 
-  const publicUrl = `/products/${catSlug}/${filename}`
+  const publicUrl = `/api/media/${catSlug}/${filename}`
   const id = uuidv4()
   try {
     await query(
       'INSERT INTO uploads (id, filename, url, category, mime, size_bytes) VALUES (?, ?, ?, ?, ?, ?)',
-      [id, filename, publicUrl, catSlug, mime, buf.byteLength]
+      [id, filename, publicUrl, catSlug, outputMime, buf.byteLength]
     )
   } catch (e) { console.error('[upload] db insert failed:', e?.message) }
 
-  return ok({ ok: true, id, filename, url: publicUrl, category: catSlug, size: buf.byteLength, mime })
+  return ok({ ok: true, id, filename, url: publicUrl, category: catSlug, size: buf.byteLength, mime: outputMime })
 }
 
 async function handleRoute(request, { params }) {
@@ -489,10 +508,9 @@ async function handleRoute(request, { params }) {
         if (!rows.length) return err('upload not found', 404)
         const u = rows[0]
         try {
-          const uploadRoot = process.env.UPLOAD_DIR || 'public/products'
-          const absRoot = path.isAbsolute(uploadRoot) ? uploadRoot : path.join(process.cwd(), uploadRoot)
+          const absRoot = getUploadRoot()
           // Support both new category folders and legacy top-level files
-          const rel = String(u.url || '').replace(/^\/products\//, '')
+          const rel = String(u.url || '').replace(/^\/(?:products|api\/media)\//, '')
           const target = rel ? path.join(absRoot, rel) : path.join(absRoot, u.filename)
           await fs.unlink(target)
         } catch (e) { console.warn('[admin] file delete failed:', e?.message) }

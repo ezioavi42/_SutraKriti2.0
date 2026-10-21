@@ -18,6 +18,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { CATEGORIES, UNCATEGORISED } from '@/lib/categories'
+import SiteImage from '@/components/site-image'
 
 const fmt = (d) => d ? new Date(d).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '—'
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
@@ -55,7 +57,7 @@ function LoginCard({ onAuth }) {
     <div className="min-h-screen flex items-center justify-center bg-cream noise px-4">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="w-full max-w-md">
         <div className="text-center mb-6">
-          <div className="h-14 mx-auto"><img src="/brand/sutrakriti-logo.png" alt="SutraKriti" className="h-full w-auto mx-auto" /></div>
+          <div className="h-14 mx-auto"><SiteImage src="/brand/sutrakriti-logo.png" alt="SutraKriti" width={180} height={72} className="h-full w-auto mx-auto" /></div>
           <div className="mt-4 text-[11px] tracking-[0.3em] uppercase text-terracotta">Studio Access</div>
           <h1 className="font-serif text-3xl text-charcoal mt-1">The Atelier</h1>
         </div>
@@ -203,16 +205,10 @@ function OrderDialog({ order, onClose, onUpdated }) {
 }
 
 /* ---------- Category upload panel (drag & drop) ---------- */
-const ADMIN_CATEGORIES = [
-  { name: 'Handbags',   slug: 'handbags' },
-  { name: 'Potli Bags', slug: 'potli-bags' },
-  { name: 'Flowers',    slug: 'flowers' },
-  { name: 'Home Decor', slug: 'home-decor' },
-  { name: 'Uncategorised', slug: 'uncategorised' },
-]
+const UPLOAD_CATEGORIES = [...CATEGORIES, { name: 'Uncategorised', slug: UNCATEGORISED }]
 
 function UploadPanel({ onUploaded }) {
-  const [category, setCategory] = useState('handbags')
+  const [category, setCategory] = useState(CATEGORIES[0]?.slug || UNCATEGORISED)
   const [drag, setDrag] = useState(false)
   const [queue, setQueue] = useState([]) // { name, status, progress, url?, error? }
 
@@ -258,7 +254,7 @@ function UploadPanel({ onUploaded }) {
       <CardHeader>
         <CardTitle className="font-serif text-xl text-charcoal">Upload product images</CardTitle>
         <div className="text-sm text-charcoal/60">
-          Files are saved under <code className="text-terracotta">public/products/&lt;category&gt;/</code> and served at <code>/products/&lt;category&gt;/&lt;file&gt;</code>.
+          Files are saved under <code className="text-terracotta">public/products/&lt;category&gt;/</code> and served from <code>/api/media/&lt;category&gt;/&lt;file&gt;</code>.
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -269,7 +265,7 @@ function UploadPanel({ onUploaded }) {
               <SelectValue placeholder="Choose category" />
             </SelectTrigger>
             <SelectContent>
-              {ADMIN_CATEGORIES.map(c => (
+              {UPLOAD_CATEGORIES.map(c => (
                 <SelectItem key={c.slug} value={c.slug}>{c.name}</SelectItem>
               ))}
             </SelectContent>
@@ -290,7 +286,7 @@ function UploadPanel({ onUploaded }) {
         >
           <ImageIcon className={`h-10 w-10 mx-auto ${drag ? 'text-terracotta' : 'text-charcoal/40'}`} />
           <div className="mt-3 font-serif text-lg text-charcoal">Drag & drop images here</div>
-          <div className="text-sm text-charcoal/60 mt-1">JPG, PNG, WebP, AVIF or GIF · up to 8 MB each · multi-file supported</div>
+          <div className="text-sm text-charcoal/60 mt-1">JPG, PNG, WebP, AVIF or GIF · up to 8 MB each · resized to WebP on upload · multi-file supported</div>
         </div>
 
         {queue.length > 0 && (
@@ -392,7 +388,7 @@ function Dashboard() {
       <header className="sticky top-0 z-40 bg-cream/85 backdrop-blur border-b border-beige">
         <div className="container flex items-center justify-between h-16">
           <div className="flex items-center gap-3">
-            <div className="h-10"><img src="/brand/sutrakriti-logo.png" alt="SutraKriti" className="h-full w-auto" /></div>
+            <div className="h-10"><SiteImage src="/brand/sutrakriti-logo.png" alt="SutraKriti" width={150} height={60} className="h-full w-auto" /></div>
             <div className="hidden md:flex flex-col leading-tight">
               <span className="text-[10px] tracking-[0.3em] uppercase text-terracotta">The Atelier</span>
               <span className="font-serif text-lg text-charcoal">Studio Dashboard</span>
@@ -566,7 +562,7 @@ function Dashboard() {
                   <SelectTrigger className="h-9 bg-cream border-beige w-52"><SelectValue placeholder="Filter category" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All categories</SelectItem>
-                    {ADMIN_CATEGORIES.map(c => (
+                    {UPLOAD_CATEGORIES.map(c => (
                       <SelectItem key={c.slug} value={c.slug}>{c.name}</SelectItem>
                     ))}
                   </SelectContent>
@@ -581,8 +577,8 @@ function Dashboard() {
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     {filteredUploads.map(u => (
                       <div key={u.id} className="group relative rounded-xl overflow-hidden border border-beige bg-cream">
-                        <div className="aspect-square bg-beige/40">
-                          <img src={u.url} alt={u.filename} className="w-full h-full object-cover" loading="lazy" />
+                        <div className="relative aspect-square bg-beige/40">
+                          <SiteImage src={u.url} alt={u.filename} fill sizes="(max-width: 768px) 50vw, 25vw" className="object-cover" />
                         </div>
                         <div className="p-3 space-y-1">
                           <div className="flex items-center justify-between gap-2">
@@ -791,8 +787,8 @@ function ProductsPanel({ products, onCreate, onEdit, onStock, onDelete }) {
             {filtered.map(p => (
               <TableRow key={p.id} className="border-beige hover:bg-cream/50" data-testid={`product-row-${p.id}`}>
                 <TableCell>
-                  <div className="w-14 h-14 rounded-lg overflow-hidden bg-beige/40 border border-beige">
-                    {p.image ? <img src={p.image} alt={p.name} className="w-full h-full object-cover" loading="lazy" /> : <div className="w-full h-full flex items-center justify-center text-charcoal/30"><ImageIcon className="h-5 w-5" /></div>}
+                  <div className="relative w-14 h-14 rounded-lg overflow-hidden bg-beige/40 border border-beige">
+                    {p.image ? <SiteImage src={p.image} alt={p.name} fill sizes="56px" className="object-cover" /> : <div className="w-full h-full flex items-center justify-center text-charcoal/30"><ImageIcon className="h-5 w-5" /></div>}
                   </div>
                 </TableCell>
                 <TableCell className="font-medium text-charcoal">{p.name}
@@ -839,6 +835,12 @@ function ProductDialog({ state, onClose, onSaved }) {
     stock_quantity: 0, low_stock_threshold: 3, sort_order: 999,
   }))
   const [busy, setBusy] = useState(false)
+  const productCategories = [
+    ...CATEGORIES,
+    ...(form.category && !CATEGORIES.some(category => category.name === form.category)
+      ? [{ name: form.category }]
+      : []),
+  ]
 
   useEffect(() => {
     if (!state) return
@@ -925,7 +927,20 @@ function ProductDialog({ state, onClose, onSaved }) {
             </div>
             <div>
               <div className="text-[10px] tracking-[0.2em] uppercase text-charcoal/50 mb-1">Category</div>
-              <Input value={form.category} onChange={e=>setForm(f=>({...f, category:e.target.value}))} placeholder="e.g. Handbags" className="bg-ivory border-beige" data-testid="product-category-input" />
+              <Select
+                value={form.category || '__none__'}
+                onValueChange={value => setForm(f => ({ ...f, category: value === '__none__' ? '' : value }))}
+              >
+                <SelectTrigger className="bg-ivory border-beige" data-testid="product-category-input">
+                  <SelectValue placeholder="Choose category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Uncategorised</SelectItem>
+                  {productCategories.map(category => (
+                    <SelectItem key={category.name} value={category.name}>{category.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <div className="text-[10px] tracking-[0.2em] uppercase text-charcoal/50 mb-1">Price (₹)</div>

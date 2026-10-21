@@ -3,8 +3,10 @@
 # Usage:
 #   ./scripts/upload-product-image.sh <path-to-image> [category-slug] [base-url]
 #
-# category-slug (optional): handbags | potli-bags | flowers | home-decor
+# category-slug (optional): any slug registered in lib/categories.js
 #   When omitted, the file is saved into public/products/uncategorised/.
+# JPEG, PNG, WebP and AVIF inputs are resized and stored as WebP by the API;
+# GIF files are preserved unchanged.
 #
 # Examples:
 #   ./scripts/upload-product-image.sh ./my-tote.jpg handbags
@@ -13,7 +15,7 @@ set -euo pipefail
 
 if [ -z "${1:-}" ]; then
   echo "Usage: $0 <path-to-image> [category-slug] [base-url]"
-  echo "Categories: handbags | potli-bags | flowers | home-decor"
+  echo "Use a category slug registered in lib/categories.js (e.g. accessories)."
   exit 1
 fi
 
