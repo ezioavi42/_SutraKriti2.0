@@ -275,28 +275,19 @@ function Hero({ onOpenCustom }) {
 
       <motion.div style={{ y: heroY, opacity: heroOpacity }} className="container relative z-10 pt-32 md:pt-40 pb-16 md:pb-24 grid md:grid-cols-12 gap-8 md:gap-12 items-center min-h-[100svh]">
         <div className="md:col-span-7">
-          <motion.div initial={{ y: 30, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.8 }}>
+          <div>
             <span className="inline-flex items-center gap-2 rounded-full border border-beige bg-ivory/70 backdrop-blur px-3 py-1 text-[11px] tracking-[0.2em] uppercase text-brown">
               <Sparkles className="h-3.5 w-3.5 text-terracotta" /> Handcrafted • Small Batch • India
             </span>
-          </motion.div>
-          <motion.h1
-            initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 1, delay: 0.15 }}
-            className="mt-6 font-serif text-5xl md:text-7xl lg:text-8xl leading-[0.98] text-charcoal"
-          >
+          </div>
+          <h1 className="mt-6 font-serif text-5xl md:text-7xl lg:text-8xl leading-[0.98] text-charcoal">
             Every <MorphingWord /><br />
             <span className="italic text-brown">tells a story.</span>
-          </motion.h1>
-          <motion.p
-            initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.9, delay: 0.5 }}
-            className="mt-6 max-w-xl text-base md:text-lg text-charcoal/70 leading-relaxed"
-          >
+          </h1>
+          <p className="mt-6 max-w-xl text-base md:text-lg text-charcoal/70 leading-relaxed">
             SutraKriti is a boutique of handcrafted crochet — bags, blankets, blooms and heirloom gifts, made slowly, thread by thread, by artisan hands.
-          </motion.p>
-          <motion.div
-            initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.9, delay: 0.75 }}
-            className="mt-8 flex flex-wrap items-center gap-3"
-          >
+          </p>
+          <div className="mt-8 flex flex-wrap items-center gap-3">
             <Button asChild size="lg" className="btn-luxury rounded-full bg-terracotta hover:bg-[color:var(--sk-terracotta-dark)] text-white px-7 h-12 text-sm tracking-wide">
               <a href="#collections">Explore Collection <ArrowRight className="ml-2 h-4 w-4" /></a>
             </Button>
@@ -304,14 +295,11 @@ function Hero({ onOpenCustom }) {
               Custom Order
             </Button>
             <a href="#story" className="ml-2 text-sm text-charcoal/60 link-underline flex items-center gap-1">Scroll the story <ChevronDown className="h-4 w-4" /></a>
-          </motion.div>
+          </div>
 
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 1, delay: 1 }}
-            className="mt-10 flex items-center gap-6 text-xs tracking-[0.2em] uppercase text-charcoal/50"
-          >
+          <div className="mt-10 flex items-center gap-6 text-xs tracking-[0.2em] uppercase text-charcoal/50">
             <span>Slow Fashion</span><span className="opacity-40">·</span><span>Handmade</span><span className="opacity-40">·</span><span>Made in India</span>
-          </motion.div>
+          </div>
         </div>
 
         <motion.div style={{ rotateX: rx, rotateY: ry }} className="md:col-span-5 relative aspect-[4/5] md:aspect-[3/4]">
