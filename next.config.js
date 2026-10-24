@@ -1,5 +1,8 @@
+const path = require('node:path')
+
 const nextConfig = {
   output: 'standalone',
+  outputFileTracingRoot: path.join(__dirname),
   experimental: {
     workerThreads: false,
     cpus: 1,
