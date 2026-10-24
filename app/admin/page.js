@@ -1161,9 +1161,16 @@ function StockDialog({ product, onClose, onSaved }) {
 function AdminApp() {
   const [status, setStatus] = useState('loading') // loading | in | out
   useEffect(() => {
-    fetch('/api/admin/me', { credentials: 'include' })
+    const controller = new AbortController()
+    const timeout = window.setTimeout(() => controller.abort(), 8000)
+    fetch('/api/admin/me', { credentials: 'include', signal: controller.signal })
       .then(r => setStatus(r.ok ? 'in' : 'out'))
       .catch(() => setStatus('out'))
+      .finally(() => window.clearTimeout(timeout))
+    return () => {
+      window.clearTimeout(timeout)
+      controller.abort()
+    }
   }, [])
   if (status === 'loading') {
     return (

@@ -1179,7 +1179,17 @@ function App() {
   const [customOpen, setCustomOpen] = useState(false)
 
   useEffect(() => {
-    fetch('/api/products').then(r=>r.json()).then(d => setProducts(d.products || [])).catch(()=>{})
+    const controller = new AbortController()
+    const timeout = window.setTimeout(() => controller.abort(), 8000)
+    fetch('/api/products', { signal: controller.signal })
+      .then(r => r.json())
+      .then(d => setProducts(d.products || []))
+      .catch(() => setProducts([]))
+      .finally(() => window.clearTimeout(timeout))
+    return () => {
+      window.clearTimeout(timeout)
+      controller.abort()
+    }
   }, [])
 
   return (
