@@ -524,8 +524,12 @@ function Collections({ products, onView }) {
             >
               <SiteImage src={p.image} alt={p.name} fill sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 60vw" className="object-cover transition-transform duration-500 group-hover:scale-[1.06]" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
-              {p.bestseller && <Badge className="absolute top-4 left-4 bg-terracotta text-white border-0">Bestseller</Badge>}
-              {p.new && <Badge className="absolute top-4 left-4 bg-sage text-white border-0">New</Badge>}
+              {(p.new || p.bestseller) && (
+                <div className="absolute top-3 left-3 right-3 z-10 flex flex-wrap gap-1.5">
+                  {p.new && <Badge className="bg-sage text-white border-0">New</Badge>}
+                  {p.bestseller && <Badge className="bg-terracotta text-white border-0">Bestseller</Badge>}
+                </div>
+              )}
               <div className="absolute inset-x-0 bottom-0 p-5 md:p-7 text-white flex items-end justify-between">
                 <div>
                   <div className="text-[10px] tracking-[0.3em] uppercase opacity-80">{p.category}</div>
@@ -916,8 +920,8 @@ function ProductGallery({ images, name }) {
   const next = () => setIdx(i => (i + 1) % list.length)
 
   return (
-    <div className="relative w-full h-full bg-beige/40 select-none">
-      <div className="relative w-full aspect-square md:aspect-auto md:h-full overflow-hidden">
+    <div className="relative w-full h-full bg-beige select-none">
+      <div className="relative w-full aspect-square md:aspect-auto md:h-full overflow-hidden bg-beige">
         <motion.div
           key={idx}
           drag={list.length > 1 ? 'x' : false}
@@ -940,7 +944,7 @@ function ProductGallery({ images, name }) {
             fill
             sizes="(max-width: 768px) 100vw, 50vw"
             draggable={false}
-            className="object-cover pointer-events-none"
+            className="object-contain pointer-events-none"
           />
         </motion.div>
       </div>
