@@ -38,7 +38,7 @@ const jsonLd = {
   logo: 'https://sutrakriti.com/logo.png',
   description: 'Luxury handcrafted crochet brand — handmade bags, blankets, flowers and personalised gifts.',
   sameAs: ['https://www.instagram.com/_sutrakriti'],
-  contactPoint: { '@type': 'ContactPoint', email: 'sutrakriti.help@outlook.com', contactType: 'customer service', areaServed: 'IN' },
+  contactPoint: { '@type': 'ContactPoint', email: 'info@sutrakriti.com', contactType: 'customer service', areaServed: 'IN' },
 }
 
 export default function RootLayout({ children }) {

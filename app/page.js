@@ -19,7 +19,7 @@ import SiteImage from '@/components/site-image'
 
 const WHATSAPP_NUMBER = '917777932385'
 const IG_URL = 'https://www.instagram.com/_sutrakriti'
-const EMAIL = 'sutrakriti.help@outlook.com'
+const EMAIL = 'info@sutrakriti.com'
 
 const CATEGORIES = ['All', ...PRODUCT_CATEGORIES.map(category => category.name)]
 
