@@ -17,7 +17,7 @@ def admin_session():
 def created_product(admin_session):
     payload = {"name": "TEST_QA_Prod", "category": "Handbags", "price": 1500,
                "stockQuantity": 10, "lowStockThreshold": 3, "perPiece": True,
-               "isActive": True}
+               "perPair": False, "perBouquet": False, "isActive": True}
     r = admin_session.post(f"{BASE}/admin/products", json=payload, timeout=15)
     assert r.status_code in (200, 201), r.text
     pid = r.json()["product"]["id"]
@@ -36,7 +36,7 @@ def test_public_products_list():
     assert len(products) >= 10
     p = products[0]
     for k in ("id", "name", "price", "stockQuantity", "lowStockThreshold",
-              "perPiece", "isActive", "sortOrder", "images", "colors"):
+              "perPiece", "perPair", "perBouquet", "isActive", "sortOrder", "images", "colors"):
         assert k in p, f"missing key {k}"
     # only active shown
     assert all(p["isActive"] for p in products)
@@ -86,6 +86,8 @@ def test_patch_ignores_stock_direct(admin_session, created_product):
     assert prod["price"] == 1999
     assert prod["stockQuantity"] != 9999, "stock should NOT change via PATCH"
     assert prod["perPiece"] is True
+    assert prod["perPair"] is False
+    assert prod["perBouquet"] is False
 
 def test_stock_delta_and_insufficient(admin_session, created_product):
     # get current

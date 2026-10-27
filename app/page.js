@@ -22,7 +22,10 @@ const IG_URL = 'https://www.instagram.com/_sutrakriti'
 const EMAIL = 'info@sutrakriti.com'
 
 const CATEGORIES = ['All', ...PRODUCT_CATEGORIES.map(category => category.name)]
-const formatPrice = product => `₹${Number(product.price).toLocaleString('en-IN')}${product.perPiece ? ' per Piece' : ''}`
+const formatPrice = product => {
+  const unit = product.perPiece ? 'per Piece' : product.perPair ? 'per Pair' : product.perBouquet ? 'per Bouquet' : ''
+  return `₹${Number(product.price).toLocaleString('en-IN')}${unit ? ` ${unit}` : ''}`
+}
 
 const GALLERY = [
   { src: '/products/potli-bags/1785704321354-31e278e6-bag4.png', h: 360 },

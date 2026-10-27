@@ -199,7 +199,9 @@ erDiagram
         TEXT images "JSON array"
         TINYINT is_new
         TINYINT is_bestseller
-        TINYINT per_piece "show price as per Piece"
+        TINYINT per_piece "price unit: Piece"
+        TINYINT per_pair "price unit: Pair"
+        TINYINT per_bouquet "price unit: Bouquet"
         TINYINT is_active
         INT stock_quantity
         INT low_stock_threshold
@@ -389,12 +391,14 @@ Returns the live catalogue from MySQL (only `is_active = 1` rows), ordered by
 ```json
 { "products": [ { "id": "p-tote-cream", "name": "…", "price": 2299,
                   "stockQuantity": 10, "lowStockThreshold": 3,
-                  "perPiece": false, … } ] }
+                  "perPiece": false, "perPair": false,
+                  "perBouquet": false, … } ] }
 ```
 Legacy fields (`image`, `images`, `colors`, `new`, `bestseller`) are preserved
 so the storefront needs no changes. The row is also enriched with `isActive`,
-`stockQuantity`, `lowStockThreshold`, `perPiece`, `sortOrder`, `createdAt`,
-`updatedAt`. Storefront prices append `per Piece` when `perPiece` is true.
+`stockQuantity`, `lowStockThreshold`, `perPiece`, `perPair`, `perBouquet`,
+`sortOrder`, `createdAt`, `updatedAt`. Storefront prices append `per Piece`,
+`per Pair`, or `per Bouquet` from the selected unit flag.
 
 ### `GET /api/products/:id`
 Single product by id — `404` if missing or inactive.
@@ -573,7 +577,7 @@ Auto-created on first request; also via `node scripts/init-db.js`.
 
 | Table | Purpose |
 |---|---|
-| `products` | **Persisted product catalogue** — name, price, category, description, JSON `images` / `colors`, flags (`is_new`, `is_bestseller`, `per_piece`, `is_active`), `stock_quantity` + `low_stock_threshold`, and `sort_order`. The admin Products editor exposes `per_piece` as **per Piece**; storefront prices append that label when enabled. Managed via the admin dashboard **Products** tab or the `/api/admin/products` endpoints. |
+| `products` | **Persisted product catalogue** — name, price, category, description, JSON `images` / `colors`, flags (`is_new`, `is_bestseller`, `per_piece`, `per_pair`, `per_bouquet`, `is_active`), `stock_quantity` + `low_stock_threshold`, and `sort_order`. The admin Products editor exposes mutually exclusive **per Piece**, **per Pair**, and **per Bouquet** units; the storefront appends the selected unit. Managed via the admin dashboard **Products** tab or the `/api/admin/products` endpoints. |
 | `inventory_movements` | **Append-only stock audit trail**. Every stock change (via API or the dashboard) writes a row with `delta`, `reason` (`restock` / `sale` / `return` / `damage` / `correction` / `initial` / `set`), `note` and the resulting `stock_quantity`. FK → `products.id` (cascade delete). |
 | `custom_orders` | Bespoke enquiries from the Custom Order modal |
 | `contacts` | Contact-form submissions |

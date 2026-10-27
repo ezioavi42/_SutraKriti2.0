@@ -79,6 +79,8 @@ async function main() {
         is_new TINYINT(1) NOT NULL DEFAULT 0,
         is_bestseller TINYINT(1) NOT NULL DEFAULT 0,
         per_piece TINYINT(1) NOT NULL DEFAULT 0,
+        per_pair TINYINT(1) NOT NULL DEFAULT 0,
+        per_bouquet TINYINT(1) NOT NULL DEFAULT 0,
         is_active TINYINT(1) NOT NULL DEFAULT 1,
         stock_quantity INT NOT NULL DEFAULT 0,
         low_stock_threshold INT NOT NULL DEFAULT 3,
@@ -95,9 +97,26 @@ async function main() {
     if (!targetColumns.some(column => column.Field === 'per_piece')) {
       await targetConn.query('ALTER TABLE products ADD COLUMN per_piece TINYINT(1) NOT NULL DEFAULT 0 AFTER is_bestseller')
     }
+    const targetColumnNames = new Set(targetColumns.map(column => column.Field))
+    if (targetColumnNames.has('per_set') && !targetColumnNames.has('per_pair')) {
+      await targetConn.query('ALTER TABLE products CHANGE COLUMN per_set per_pair TINYINT(1) NOT NULL DEFAULT 0')
+    } else if (targetColumnNames.has('per_set') && targetColumnNames.has('per_pair')) {
+      await targetConn.query('UPDATE products SET per_pair = 1 WHERE per_set = 1')
+      await targetConn.query('ALTER TABLE products DROP COLUMN per_set')
+    }
+    if (!targetColumnNames.has('per_pair')) {
+      await targetConn.query('ALTER TABLE products ADD COLUMN per_pair TINYINT(1) NOT NULL DEFAULT 0 AFTER per_piece')
+    }
+    if (!targetColumnNames.has('per_bouquet')) {
+      await targetConn.query('ALTER TABLE products ADD COLUMN per_bouquet TINYINT(1) NOT NULL DEFAULT 0 AFTER per_pair')
+    }
 
     const [columnsRows] = await sourceConn.query('SHOW COLUMNS FROM products')
-    const columns = columnsRows.map(row => row.Field)
+    const sourceColumns = columnsRows.map(row => row.Field)
+    const hasSourcePair = sourceColumns.includes('per_pair')
+    const columns = sourceColumns
+      .filter(column => column !== 'per_set' || !hasSourcePair)
+      .map(column => column === 'per_set' ? 'per_pair' : column)
     if (!columns.length) {
       throw new Error('No columns found in source products table')
     }
@@ -117,7 +136,7 @@ async function main() {
     }
 
     for (const row of rows) {
-      const values = columns.map(col => row[col])
+      const values = columns.map(col => col === 'per_pair' && !hasSourcePair ? row.per_set : row[col])
       await targetConn.query(`
         INSERT INTO products (${columnList})
         VALUES (${placeholders})

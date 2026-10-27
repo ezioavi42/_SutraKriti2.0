@@ -89,6 +89,8 @@ async function main() {
       is_new TINYINT(1) NOT NULL DEFAULT 0,
       is_bestseller TINYINT(1) NOT NULL DEFAULT 0,
       per_piece TINYINT(1) NOT NULL DEFAULT 0,
+      per_pair TINYINT(1) NOT NULL DEFAULT 0,
+      per_bouquet TINYINT(1) NOT NULL DEFAULT 0,
       is_active TINYINT(1) NOT NULL DEFAULT 1,
       stock_quantity INT NOT NULL DEFAULT 0,
       low_stock_threshold INT NOT NULL DEFAULT 3,
@@ -118,6 +120,19 @@ async function main() {
   if (!productColumns.some(column => column.Field === 'per_piece')) {
     await conn.query('ALTER TABLE products ADD COLUMN per_piece TINYINT(1) NOT NULL DEFAULT 0 AFTER is_bestseller')
   }
+  const productColumnNames = new Set(productColumns.map(column => column.Field))
+  if (productColumnNames.has('per_set') && !productColumnNames.has('per_pair')) {
+    await conn.query('ALTER TABLE products CHANGE COLUMN per_set per_pair TINYINT(1) NOT NULL DEFAULT 0')
+  } else if (productColumnNames.has('per_set') && productColumnNames.has('per_pair')) {
+    await conn.query('UPDATE products SET per_pair = 1 WHERE per_set = 1')
+    await conn.query('ALTER TABLE products DROP COLUMN per_set')
+  }
+  if (!productColumnNames.has('per_pair')) {
+    await conn.query('ALTER TABLE products ADD COLUMN per_pair TINYINT(1) NOT NULL DEFAULT 0 AFTER per_piece')
+  }
+  if (!productColumnNames.has('per_bouquet')) {
+    await conn.query('ALTER TABLE products ADD COLUMN per_bouquet TINYINT(1) NOT NULL DEFAULT 0 AFTER per_pair')
+  }
 
   // Seed products table from the legacy static catalogue if empty.
   const [countRows] = await conn.query('SELECT COUNT(*) AS n FROM products')
@@ -141,8 +156,8 @@ async function main() {
       await conn.query(
         `INSERT INTO products
            (id, name, category, price, description, material, dimensions, care, delivery,
-            colors, images, is_new, is_bestseller, per_piece, is_active, stock_quantity, low_stock_threshold, sort_order)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, 10, 3, ?)
+            colors, images, is_new, is_bestseller, per_piece, per_pair, per_bouquet, is_active, stock_quantity, low_stock_threshold, sort_order)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 1, 10, 3, ?)
          ON DUPLICATE KEY UPDATE name=VALUES(name)`,
         [
           p.id, p.name, p.category || null, Number(p.price) || 0,
