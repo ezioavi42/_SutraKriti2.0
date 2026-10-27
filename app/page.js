@@ -22,6 +22,7 @@ const IG_URL = 'https://www.instagram.com/_sutrakriti'
 const EMAIL = 'info@sutrakriti.com'
 
 const CATEGORIES = ['All', ...PRODUCT_CATEGORIES.map(category => category.name)]
+const formatPrice = product => `₹${Number(product.price).toLocaleString('en-IN')}${product.perPiece ? ' per Piece' : ''}`
 
 const GALLERY = [
   { src: '/products/potli-bags/1785704321354-31e278e6-bag4.png', h: 360 },
@@ -534,7 +535,7 @@ function Collections({ products, onView }) {
                 <div>
                   <div className="text-[10px] tracking-[0.3em] uppercase opacity-80">{p.category}</div>
                   <div className="font-serif text-2xl md:text-3xl mt-1">{p.name}</div>
-                  <div className="mt-1 text-sm opacity-90">₹{p.price.toLocaleString('en-IN')}</div>
+                  <div className="mt-1 text-sm opacity-90">{formatPrice(p)}</div>
                 </div>
                 <span className="h-10 w-10 rounded-full bg-white/15 border border-white/30 backdrop-blur flex items-center justify-center opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all">
                   <ArrowUpRight className="h-4 w-4" />
@@ -599,7 +600,7 @@ function Catalogue({ products, onView }) {
                   <div className="text-[10px] tracking-[0.2em] uppercase text-charcoal/50">{p.category}</div>
                   <div className="font-serif text-lg text-charcoal">{p.name}</div>
                 </div>
-                <div className="font-serif text-lg text-terracotta whitespace-nowrap">₹{p.price.toLocaleString('en-IN')}</div>
+                <div className="font-serif text-lg text-terracotta whitespace-nowrap">{formatPrice(p)}</div>
               </div>
             </button>
           ))}
@@ -990,7 +991,7 @@ function ProductModal({ product, open, onClose, onCustom }) {
       const r = await fetch('/api/razorpay/order', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ productId: product.id }) })
       if (r.status === 503) {
         toast.message('Online payment is being set up. Opening WhatsApp for direct order.')
-        const priceStr = `\u20b9${Number(product.price).toLocaleString('en-IN')}`
+        const priceStr = formatPrice(product)
         const colours = product.colors?.length ? `\nColours: ${product.colors.join(', ')}` : ''
         const t = `Hello SutraKriti, I would like to order the following piece from your collection:
 
@@ -1028,7 +1029,7 @@ Thank you!`
     } finally { setBusy(false) }
   }
   const orderWhats = () => {
-    const priceStr = `\u20b9${Number(product.price).toLocaleString('en-IN')}`
+    const priceStr = formatPrice(product)
     const colours = product.colors?.length ? `\nColours: ${product.colors.join(', ')}` : ''
     const t = `Hello SutraKriti, I would like to order the following piece from your collection:
 
@@ -1059,7 +1060,7 @@ Thank you!`
               <DialogHeader className="mt-2 p-0">
                 <DialogTitle className="font-serif text-3xl text-charcoal text-left">{product.name}</DialogTitle>
               </DialogHeader>
-              <div className="mt-1 font-serif text-2xl text-terracotta">₹{product.price.toLocaleString('en-IN')}</div>
+              <div className="mt-1 font-serif text-2xl text-terracotta">{formatPrice(product)}</div>
               <p className="mt-4 text-charcoal/70 leading-relaxed">{product.description}</p>
               <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
                 <Info label="Material" value={product.material} />

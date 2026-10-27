@@ -256,6 +256,8 @@ Products are persisted in the MySQL `products` table (schema created by
 `lib/products.js` with a starting stock of `10` per product.
 
 - **CRUD**: `/admin` → **Products** tab → *New product* / *Edit* / *Delete*.
+- **Per-piece pricing**: select **per Piece** in the product editor to show
+  `per Piece` after that product's price on the storefront.
 - **Stock adjustments**: *Stock* button on any row → increment/decrement or
   set an absolute quantity, with a reason (restock / sale / return / damage
   / correction). Movements are appended to `inventory_movements` for a full
@@ -269,7 +271,7 @@ Sanity-check queries:
 
 ```bash
 mysql -usutrakriti -psutrakriti_dev_pw sutrakriti \
-  -e "SELECT id, name, stock_quantity, is_active FROM products ORDER BY sort_order LIMIT 20;"
+  -e "SELECT id, name, price, per_piece, stock_quantity, is_active FROM products ORDER BY sort_order LIMIT 20;"
 
 mysql -usutrakriti -psutrakriti_dev_pw sutrakriti \
   -e "SELECT * FROM inventory_movements ORDER BY created_at DESC LIMIT 20;"

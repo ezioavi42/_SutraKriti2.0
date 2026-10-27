@@ -408,8 +408,10 @@ Recommended production hardening:
 - Rotate `ADMIN_PASSWORD` after any staff change; the `sk_admin` cookie is
   HMAC-signed against `ADMIN_SESSION_SECRET` (fall-through: `ADMIN_PASSWORD`).
 - If you migrate from a pre-persistence install, `node scripts/init-db.js`
-  (safe to re-run) creates the new tables **and** seeds from the legacy
-  `lib/products.js` file if the table is empty.
+  (safe to re-run) creates the new tables, migrates `per_piece` on existing
+  product tables, and seeds from the legacy `lib/products.js` file if the
+  table is empty. The sync script also creates/migrates this column in the
+  target database before copying products.
 
 For the full API surface (list / create / update / delete / stock adjust /
 movement history), see the *Managing products & inventory* section of the

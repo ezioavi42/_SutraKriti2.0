@@ -831,7 +831,7 @@ function ProductDialog({ state, onClose, onSaved }) {
     id: '', name: '', category: '', price: 0,
     description: '', material: '', dimensions: '', care: '', delivery: '',
     colors: '', images: '',
-    is_new: false, is_bestseller: false, is_active: true,
+    is_new: false, is_bestseller: false, per_piece: false, is_active: true,
     stock_quantity: 0, low_stock_threshold: 3, sort_order: 999,
   }))
   const [busy, setBusy] = useState(false)
@@ -853,7 +853,7 @@ function ProductDialog({ state, onClose, onSaved }) {
         dimensions: p.dimensions || '', care: p.care || '', delivery: p.delivery || '',
         colors: (p.colors || []).join(', '),
         images: (p.images || []).join('\n'),
-        is_new: !!p.new, is_bestseller: !!p.bestseller, is_active: !!p.isActive,
+        is_new: !!p.new, is_bestseller: !!p.bestseller, per_piece: !!p.perPiece, is_active: !!p.isActive,
         stock_quantity: Number(p.stockQuantity) || 0,
         low_stock_threshold: Number(p.lowStockThreshold) || 3,
         sort_order: Number(p.sortOrder) || 999,
@@ -863,7 +863,7 @@ function ProductDialog({ state, onClose, onSaved }) {
         id: '', name: '', category: 'Handbags', price: 0,
         description: '', material: '', dimensions: '', care: '', delivery: '',
         colors: '', images: '',
-        is_new: false, is_bestseller: false, is_active: true,
+        is_new: false, is_bestseller: false, per_piece: false, is_active: true,
         stock_quantity: 0, low_stock_threshold: 3, sort_order: 999,
       })
     }
@@ -1007,6 +1007,10 @@ function ProductDialog({ state, onClose, onSaved }) {
               <label className="inline-flex items-center gap-2 text-sm text-charcoal/80">
                 <input type="checkbox" checked={form.is_bestseller} onChange={e=>setForm(f=>({...f, is_bestseller:e.target.checked}))} className="h-4 w-4 accent-[color:var(--sk-terracotta)]" />
                 Bestseller
+              </label>
+              <label className="inline-flex items-center gap-2 text-sm text-charcoal/80">
+                <input type="checkbox" checked={form.per_piece} onChange={e=>setForm(f=>({...f, per_piece:e.target.checked}))} className="h-4 w-4 accent-[color:var(--sk-terracotta)]" data-testid="product-per-piece-checkbox" />
+                per Piece
               </label>
             </div>
           </div>

@@ -88,6 +88,7 @@ async function main() {
       images TEXT,
       is_new TINYINT(1) NOT NULL DEFAULT 0,
       is_bestseller TINYINT(1) NOT NULL DEFAULT 0,
+      per_piece TINYINT(1) NOT NULL DEFAULT 0,
       is_active TINYINT(1) NOT NULL DEFAULT 1,
       stock_quantity INT NOT NULL DEFAULT 0,
       low_stock_threshold INT NOT NULL DEFAULT 3,
@@ -113,6 +114,11 @@ async function main() {
   ]
   for (const s of statements) await conn.query(s)
 
+  const [productColumns] = await conn.query('SHOW COLUMNS FROM products')
+  if (!productColumns.some(column => column.Field === 'per_piece')) {
+    await conn.query('ALTER TABLE products ADD COLUMN per_piece TINYINT(1) NOT NULL DEFAULT 0 AFTER is_bestseller')
+  }
+
   // Seed products table from the legacy static catalogue if empty.
   const [countRows] = await conn.query('SELECT COUNT(*) AS n FROM products')
   if (Number(countRows?.[0]?.n || 0) === 0) {
@@ -135,8 +141,8 @@ async function main() {
       await conn.query(
         `INSERT INTO products
            (id, name, category, price, description, material, dimensions, care, delivery,
-            colors, images, is_new, is_bestseller, is_active, stock_quantity, low_stock_threshold, sort_order)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 10, 3, ?)
+            colors, images, is_new, is_bestseller, per_piece, is_active, stock_quantity, low_stock_threshold, sort_order)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, 10, 3, ?)
          ON DUPLICATE KEY UPDATE name=VALUES(name)`,
         [
           p.id, p.name, p.category || null, Number(p.price) || 0,

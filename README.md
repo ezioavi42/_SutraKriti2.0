@@ -199,6 +199,7 @@ erDiagram
         TEXT images "JSON array"
         TINYINT is_new
         TINYINT is_bestseller
+        TINYINT per_piece "show price as per Piece"
         TINYINT is_active
         INT stock_quantity
         INT low_stock_threshold
@@ -387,11 +388,13 @@ Returns the live catalogue from MySQL (only `is_active = 1` rows), ordered by
 `sort_order`:
 ```json
 { "products": [ { "id": "p-tote-cream", "name": "…", "price": 2299,
-                  "stockQuantity": 10, "lowStockThreshold": 3, … } ] }
+                  "stockQuantity": 10, "lowStockThreshold": 3,
+                  "perPiece": false, … } ] }
 ```
 Legacy fields (`image`, `images`, `colors`, `new`, `bestseller`) are preserved
 so the storefront needs no changes. The row is also enriched with `isActive`,
-`stockQuantity`, `lowStockThreshold`, `sortOrder`, `createdAt`, `updatedAt`.
+`stockQuantity`, `lowStockThreshold`, `perPiece`, `sortOrder`, `createdAt`,
+`updatedAt`. Storefront prices append `per Piece` when `perPiece` is true.
 
 ### `GET /api/products/:id`
 Single product by id — `404` if missing or inactive.
@@ -570,7 +573,7 @@ Auto-created on first request; also via `node scripts/init-db.js`.
 
 | Table | Purpose |
 |---|---|
-| `products` | **Persisted product catalogue** — name, price, category, description, JSON `images` / `colors`, flags (`is_new`, `is_bestseller`, `is_active`), `stock_quantity` + `low_stock_threshold`, and `sort_order`. Managed via the admin dashboard **Products** tab or the `/api/admin/products` endpoints. |
+| `products` | **Persisted product catalogue** — name, price, category, description, JSON `images` / `colors`, flags (`is_new`, `is_bestseller`, `per_piece`, `is_active`), `stock_quantity` + `low_stock_threshold`, and `sort_order`. The admin Products editor exposes `per_piece` as **per Piece**; storefront prices append that label when enabled. Managed via the admin dashboard **Products** tab or the `/api/admin/products` endpoints. |
 | `inventory_movements` | **Append-only stock audit trail**. Every stock change (via API or the dashboard) writes a row with `delta`, `reason` (`restock` / `sale` / `return` / `damage` / `correction` / `initial` / `set`), `note` and the resulting `stock_quantity`. FK → `products.id` (cascade delete). |
 | `custom_orders` | Bespoke enquiries from the Custom Order modal |
 | `contacts` | Contact-form submissions |

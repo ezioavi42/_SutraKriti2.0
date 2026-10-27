@@ -20,8 +20,9 @@
 - **Stack**: Next.js 15 (App Router, JS) · MariaDB · Tailwind + shadcn/ui.
 - **New tables**
   - `products` — full product metadata + `stock_quantity`,
-    `low_stock_threshold`, `is_active`, `sort_order`, JSON `images` /
-    `colors`.
+    `low_stock_threshold`, `per_piece`, `is_active`, `sort_order`, JSON
+    `images` / `colors`. When `per_piece` is enabled, storefront prices
+    display `per Piece` after the amount.
   - `inventory_movements` — append-only audit trail with `delta`,
     `reason`, `note`, `resulting_quantity`. FK → `products.id`.
 - **Data access**: `lib/productsDb.js` (list/get/create/update/delete +

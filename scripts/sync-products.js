@@ -78,6 +78,7 @@ async function main() {
         images TEXT,
         is_new TINYINT(1) NOT NULL DEFAULT 0,
         is_bestseller TINYINT(1) NOT NULL DEFAULT 0,
+        per_piece TINYINT(1) NOT NULL DEFAULT 0,
         is_active TINYINT(1) NOT NULL DEFAULT 1,
         stock_quantity INT NOT NULL DEFAULT 0,
         low_stock_threshold INT NOT NULL DEFAULT 3,
@@ -89,6 +90,11 @@ async function main() {
         INDEX(sort_order)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `)
+
+    const [targetColumns] = await targetConn.query('SHOW COLUMNS FROM products')
+    if (!targetColumns.some(column => column.Field === 'per_piece')) {
+      await targetConn.query('ALTER TABLE products ADD COLUMN per_piece TINYINT(1) NOT NULL DEFAULT 0 AFTER is_bestseller')
+    }
 
     const [columnsRows] = await sourceConn.query('SHOW COLUMNS FROM products')
     const columns = columnsRows.map(row => row.Field)
