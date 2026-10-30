@@ -259,6 +259,10 @@ Products are persisted in the MySQL `products` table (schema created by
 - **Price units**: select **per Piece**, **per Pair**, or **per Bouquet** in
   the product editor to append that unit after the product's storefront price.
   Only one unit can be selected for a product.
+- **Storefront gallery**: open `/admin` → **Gallery** to select, order, and
+  save images from the built-in gallery or uploaded image library. Upload new
+  candidates in the **Uploads** tab. The selected order is shown on the
+  storefront's Gallery section.
 - **Stock adjustments**: *Stock* button on any row → increment/decrement or
   set an absolute quantity, with a reason (restock / sale / return / damage
   / correction). Movements are appended to `inventory_movements` for a full

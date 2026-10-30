@@ -49,14 +49,33 @@ def test_public_get_single_and_404():
     r3 = requests.get(f"{BASE}/products/does-not-exist-xyz", timeout=10)
     assert r3.status_code == 404
 
+def test_public_gallery_images():
+    r = requests.get(f"{BASE}/gallery", timeout=15)
+    assert r.status_code == 200, r.text
+    images = r.json()["images"]
+    assert 1 <= len(images) <= 30
+    assert all(isinstance(image, str) and image for image in images)
+
 # -------------------- Auth --------------------
 def test_admin_me_unauth():
     r = requests.get(f"{BASE}/admin/me", timeout=10)
     assert r.status_code == 401
 
+def test_admin_gallery_requires_auth():
+    r = requests.get(f"{BASE}/admin/gallery", timeout=10)
+    assert r.status_code == 401
+
 def test_admin_me_auth(admin_session):
     r = admin_session.get(f"{BASE}/admin/me", timeout=10)
     assert r.status_code == 200
+
+def test_admin_gallery_rejects_unavailable_images(admin_session):
+    r = admin_session.put(
+        f"{BASE}/admin/gallery",
+        json={"images": ["https://unregistered.example/image.jpg"]},
+        timeout=10,
+    )
+    assert r.status_code == 400, r.text
 
 # -------------------- Admin CRUD --------------------
 def test_admin_products_lists_all(admin_session):

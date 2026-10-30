@@ -12,6 +12,7 @@ import {
   adjustStock, listStockMovements, seedProductsIfEmpty,
 } from '@/lib/productsDb'
 import { toSlug, CATEGORY_SLUGS, UNCATEGORISED } from '@/lib/categories'
+import { DEFAULT_GALLERY } from '@/lib/gallery'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -349,6 +350,16 @@ async function handleRoute(request, { params }) {
     // Upload endpoint (token-protected)
     if (route === '/upload' && method === 'POST') return handleUpload(request)
 
+    if (route === '/gallery' && method === 'GET') {
+      await initSchema()
+      const rows = await query('SELECT setting_value FROM site_settings WHERE setting_key=? LIMIT 1', ['storefront_gallery'])
+      const images = rows.length ? JSON.parse(rows[0].setting_value) : DEFAULT_GALLERY.map(image => image.src)
+      if (!Array.isArray(images) || images.some(image => typeof image !== 'string')) {
+        throw new Error('Invalid storefront gallery settings')
+      }
+      return ok({ images })
+    }
+
     // ---------------- Admin ----------------
     // Login
     if (route === '/admin/login' && method === 'POST') {
@@ -381,6 +392,50 @@ async function handleRoute(request, { params }) {
     // Every other /admin/* route requires auth
     if (route.startsWith('/admin/')) {
       if (!isAdmin(request)) return err('unauthorised', 401)
+
+      if (route === '/admin/gallery' && method === 'GET') {
+        await initSchema()
+        const settings = await query('SELECT setting_value FROM site_settings WHERE setting_key=? LIMIT 1', ['storefront_gallery'])
+        const images = settings.length ? JSON.parse(settings[0].setting_value) : DEFAULT_GALLERY.map(image => image.src)
+        if (!Array.isArray(images) || images.some(image => typeof image !== 'string')) {
+          throw new Error('Invalid storefront gallery settings')
+        }
+        return ok({ images })
+      }
+
+      if (route === '/admin/gallery' && method === 'PUT') {
+        const body = await request.json().catch(() => null)
+        if (!Array.isArray(body?.images) || body.images.length < 1 || body.images.length > 30) {
+          return err('select between 1 and 30 gallery images', 400)
+        }
+        const images = [...new Set(body.images)]
+        if (images.length !== body.images.length || images.some(image =>
+          typeof image !== 'string' || image.length > 2048 || image.trim() !== image ||
+          !(image.startsWith('/products/') || image.startsWith('/api/media/') || /^https:\/\//i.test(image))
+        )) {
+          return err('gallery images must be unique valid image URLs', 400)
+        }
+        await initSchema()
+        const defaultImages = new Set(DEFAULT_GALLERY.map(image => image.src))
+        const uploadRows = await query(
+          `SELECT url FROM uploads WHERE url IN (${images.map(() => '?').join(', ')})`,
+          images
+        )
+        const validImages = new Set([
+          ...defaultImages,
+          ...uploadRows.map(upload => upload.url),
+        ])
+        if (images.some(image => !validImages.has(image))) {
+          return err('gallery images must be selected from the built-in gallery or uploaded image library', 400)
+        }
+        await query(
+          `INSERT INTO site_settings (setting_key, setting_value)
+           VALUES (?, ?)
+           ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)`,
+          ['storefront_gallery', JSON.stringify(images)]
+        )
+        return ok({ ok: true, images })
+      }
 
       if (route === '/admin/stats' && method === 'GET') {
         const [orders] = await Promise.all([
@@ -503,10 +558,27 @@ async function handleRoute(request, { params }) {
       }
       const mDelUpload = route.match(/^\/admin\/uploads\/([^/]+)$/)
       if (mDelUpload && method === 'DELETE') {
+        await initSchema()
         const id = mDelUpload[1]
         const rows = await query('SELECT * FROM uploads WHERE id=?', [id])
         if (!rows.length) return err('upload not found', 404)
         const u = rows[0]
+        const settings = await query('SELECT setting_value FROM site_settings WHERE setting_key=? LIMIT 1', ['storefront_gallery'])
+        if (settings.length) {
+          const currentImages = JSON.parse(settings[0].setting_value)
+          if (!Array.isArray(currentImages)) throw new Error('Invalid storefront gallery settings')
+          const remainingImages = currentImages.filter(image => image !== u.url)
+          if (remainingImages.length !== currentImages.length) {
+            if (remainingImages.length) {
+              await query(
+                'UPDATE site_settings SET setting_value=? WHERE setting_key=?',
+                [JSON.stringify(remainingImages), 'storefront_gallery']
+              )
+            } else {
+              await query('DELETE FROM site_settings WHERE setting_key=?', ['storefront_gallery'])
+            }
+          }
+        }
         try {
           const absRoot = getUploadRoot()
           // Support both new category folders and legacy top-level files

@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/badge'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { toast, Toaster } from 'sonner'
 import { CATEGORIES as PRODUCT_CATEGORIES } from '@/lib/categories'
+import { DEFAULT_GALLERY, galleryImagesFromUrls } from '@/lib/gallery'
 import SiteImage from '@/components/site-image'
 
 const WHATSAPP_NUMBER = '917777932385'
@@ -37,19 +38,6 @@ function ProductPrice({ product, className = '' }) {
     </span>
   )
 }
-
-const GALLERY = [
-  { src: '/products/potli-bags/1785704321354-31e278e6-bag4.png', h: 360 },
-  { src: 'https://images.unsplash.com/photo-1645516956968-dee62f4a9090', h: 360 },
-  { src: '/products/flowers/1785536229648-3bbd6fde-img-8876.png', h: 520 },
-  { src: 'https://images.pexels.com/photos/20269075/pexels-photo-20269075.jpeg', h: 380 },
-  { src: 'https://images.unsplash.com/photo-1571434976902-a6e3e1eb0d51', h: 440 },
-  { src: 'https://images.pexels.com/photos/32452334/pexels-photo-32452334.jpeg', h: 400 },
-  { src: 'https://images.pexels.com/photos/5806996/pexels-photo-5806996.jpeg', h: 480 },
-  { src: 'https://images.unsplash.com/photo-1560347964-838d2f63cdc0', h: 340 },
-  { src: 'https://images.pexels.com/photos/18971489/pexels-photo-18971489.jpeg', h: 500 },
-  { src: 'https://images.pexels.com/photos/36238478/pexels-photo-36238478.jpeg', h: 420 },
-]
 
 const REVIEWS = [
   { name: 'Ananya S.', city: 'Mumbai', rating: 5, text: 'The bouquet blanket is a heirloom. Every stitch feels like poetry. I gifted it to my mother and she cried.', avatar: 'https://i.pravatar.cc/120?img=47' },
@@ -300,7 +288,7 @@ function Hero({ onOpenCustom }) {
             <span className="italic text-brown">tells a story.</span>
           </h1>
           <p className="mt-6 max-w-xl text-base md:text-lg text-charcoal/70 leading-relaxed">
-            SutraKriti is a boutique of handcrafted crochet — bags, blankets, blooms and heirloom gifts, made slowly, thread by thread, by artisan hands.
+            SutraKriti is a boutique of handcrafted crochet — bags, blankets, blooms and heirloom gifts, made slowly, thread by thread, crafted with care.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <Button asChild size="lg" className="btn-luxury rounded-full bg-terracotta hover:bg-[color:var(--sk-terracotta-dark)] text-white px-7 h-12 text-sm tracking-wide">
@@ -771,7 +759,7 @@ function Reviews() {
   )
 }
 
-function Gallery() {
+function Gallery({ images }) {
   const [open, setOpen] = useState(null)
   return (
     <section id="gallery" className="py-24 md:py-32 bg-ivory">
@@ -786,7 +774,7 @@ function Gallery() {
           </a>
         </div>
         <div className="masonry">
-          {GALLERY.map((g, i) => (
+          {images.map((g, i) => (
             <motion.button
               key={i}
               initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: '-50px' }}
@@ -1200,6 +1188,7 @@ function FloatingCTA({ onOpenCustom }) {
 
 function App() {
   const [products, setProducts] = useState([])
+  const [gallery, setGallery] = useState(DEFAULT_GALLERY)
   const [viewing, setViewing] = useState(null)
   const [customOpen, setCustomOpen] = useState(false)
 
@@ -1217,6 +1206,22 @@ function App() {
     }
   }, [])
 
+  useEffect(() => {
+    const controller = new AbortController()
+    fetch('/api/gallery', { signal: controller.signal })
+      .then(response => {
+        if (!response.ok) throw new Error(`Gallery request failed: ${response.status}`)
+        return response.json()
+      })
+      .then(data => {
+        if (Array.isArray(data.images)) setGallery(galleryImagesFromUrls(data.images))
+      })
+      .catch(error => {
+        if (error.name !== 'AbortError') console.error('Failed to load gallery images:', error)
+      })
+    return () => controller.abort()
+  }, [])
+
   return (
     <div className="relative">
       <Toaster position="top-center" richColors closeButton />
@@ -1231,7 +1236,7 @@ function App() {
       <Personalisation onOpenCustom={() => setCustomOpen(true)} />
       <ProcessSection />
       <Reviews />
-      <Gallery />
+      <Gallery images={gallery} />
       <FaqSection />
       <Newsletter />
       <Footer onOpenCustom={() => setCustomOpen(true)} />

@@ -7,7 +7,7 @@ import {
   LogOut, RefreshCw, Search, CheckCircle2, Clock, Send, Mail, Trash2, Copy,
   Image as ImageIcon, Users, MessageSquare, CreditCard, ClipboardList, Undo2,
   ExternalLink, StickyNote, ShieldCheck, Sparkles, Package, Plus, Minus,
-  Pencil, Boxes, AlertTriangle, PackageX, PackagePlus,
+  Pencil, Boxes, AlertTriangle, PackageX, PackagePlus, ArrowUp, ArrowDown,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,6 +19,7 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { CATEGORIES, UNCATEGORISED } from '@/lib/categories'
+import { DEFAULT_GALLERY } from '@/lib/gallery'
 import SiteImage from '@/components/site-image'
 
 const fmt = (d) => d ? new Date(d).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '—'
@@ -313,6 +314,135 @@ function UploadPanel({ onUploaded }) {
     </Card>
   )
 }
+
+function GallerySettings({ uploads, initialImages, onSaved }) {
+  const [selected, setSelected] = useState(initialImages)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => setSelected(initialImages), [initialImages])
+
+  const save = async () => {
+    setSaving(true)
+    try {
+      const response = await fetch('/api/admin/gallery', {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ images: selected }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        toast.error(data.error || 'Failed to save gallery')
+        return
+      }
+      onSaved(data.images)
+      toast.success('Storefront gallery updated')
+    } catch (error) {
+      toast.error(error.message || 'Failed to save gallery')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const move = (index, direction) => {
+    const target = index + direction
+    if (target < 0 || target >= selected.length) return
+    setSelected(current => {
+      const next = [...current]
+      ;[next[index], next[target]] = [next[target], next[index]]
+      return next
+    })
+  }
+
+  const selectedSet = new Set(selected)
+  const availableImages = [
+    ...DEFAULT_GALLERY.map((image, index) => ({
+      id: `default-${index}`,
+      filename: `Default gallery image ${index + 1}`,
+      url: image.src,
+    })),
+    ...uploads,
+  ].filter((image, index, list) =>
+    !selectedSet.has(image.url) && list.findIndex(candidate => candidate.url === image.url) === index
+  )
+  const addImage = url => {
+    if (selected.length >= 30) {
+      toast.error('The storefront gallery can contain up to 30 images')
+      return
+    }
+    setSelected(current => current.includes(url) ? current : [...current, url])
+  }
+
+  return (
+    <div className="space-y-6">
+      <Card className="bg-ivory border-beige">
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <CardTitle className="font-serif text-xl text-charcoal">Selected storefront images</CardTitle>
+            <div className="text-sm text-charcoal/60 mt-1">Select and order between 1 and 30 images. The first image appears first in the gallery.</div>
+          </div>
+          <Button onClick={save} disabled={saving || selected.length === 0} className="rounded-full bg-terracotta hover:bg-[color:var(--sk-terracotta-dark)] text-white" data-testid="save-gallery-btn">
+            {saving ? 'Saving…' : 'Save gallery'}
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {selected.length === 0 ? (
+            <div className="py-10 text-center text-sm text-charcoal/50">Choose images from the library below.</div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+              {selected.map((url, index) => (
+                <div key={url} className="overflow-hidden rounded-xl border border-beige bg-cream" data-testid={`gallery-selected-${index}`}>
+                  <div className="relative aspect-square">
+                    <SiteImage src={url} alt={`Gallery image ${index + 1}`} fill sizes="(max-width: 640px) 50vw, 20vw" className="object-cover" />
+                    <span className="absolute left-2 top-2 rounded-full bg-charcoal/80 text-white text-xs px-2 py-1">{index + 1}</span>
+                  </div>
+                  <div className="flex items-center justify-between p-2">
+                    <button type="button" onClick={() => move(index, -1)} disabled={index === 0} aria-label={`Move image ${index + 1} earlier`} className="h-8 w-8 flex items-center justify-center rounded-full hover:bg-beige disabled:opacity-30">
+                      <ArrowUp className="h-4 w-4" />
+                    </button>
+                    <button type="button" onClick={() => move(index, 1)} disabled={index === selected.length - 1} aria-label={`Move image ${index + 1} later`} className="h-8 w-8 flex items-center justify-center rounded-full hover:bg-beige disabled:opacity-30">
+                      <ArrowDown className="h-4 w-4" />
+                    </button>
+                    <button type="button" onClick={() => setSelected(current => current.filter(image => image !== url))} disabled={selected.length === 1} aria-label={`Remove image ${index + 1}`} className="text-xs text-red-600 hover:underline px-2 disabled:opacity-30 disabled:no-underline">
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="bg-ivory border-beige">
+        <CardHeader>
+          <CardTitle className="font-serif text-xl text-charcoal">Image library</CardTitle>
+          <div className="text-sm text-charcoal/60">Add a current default image or an uploaded image. Upload new images from the Uploads tab.</div>
+        </CardHeader>
+        <CardContent>
+          {availableImages.length === 0 ? (
+            <div className="py-10 text-center text-sm text-charcoal/50">All available images are already selected.</div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+              {availableImages.map(upload => (
+                <button key={upload.id} type="button" onClick={() => addImage(upload.url)} className="group overflow-hidden rounded-xl border border-beige bg-cream text-left hover:border-terracotta focus-visible:outline focus-visible:outline-2 focus-visible:outline-terracotta" aria-label={`Add ${upload.filename} to storefront gallery`}>
+                  <div className="relative aspect-square bg-beige/40">
+                    <SiteImage src={upload.url} alt={upload.filename} fill sizes="(max-width: 640px) 50vw, 20vw" className="object-cover transition-transform group-hover:scale-105" />
+                    <span className="absolute inset-0 flex items-center justify-center bg-charcoal/0 group-hover:bg-charcoal/25 transition-colors">
+                      <Plus className="h-8 w-8 text-white opacity-0 group-hover:opacity-100" />
+                    </span>
+                  </div>
+                  <div className="p-2 text-xs text-charcoal truncate" title={upload.filename}>{upload.filename}</div>
+                </button>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
 function Dashboard() {
   const [tab, setTab] = useState('overview')
   const [busy, setBusy] = useState(false)
@@ -324,6 +454,7 @@ function Dashboard() {
   const [subs, setSubs] = useState([])
   const [payments, setPayments] = useState([])
   const [products, setProducts] = useState([])
+  const [galleryImages, setGalleryImages] = useState(DEFAULT_GALLERY.map(image => image.src))
 
   const [statusFilter, setStatusFilter] = useState('all')
   const [search, setSearch] = useState('')
@@ -336,7 +467,7 @@ function Dashboard() {
     setBusy(true)
     try {
       const j = async (u) => (await fetch(u, { credentials: 'include' })).json()
-      const [s, o, u, c, n, p, pr] = await Promise.all([
+      const [s, o, u, c, n, p, pr, gallery] = await Promise.all([
         j('/api/admin/stats'),
         j(`/api/admin/custom-orders${statusFilter !== 'all' ? `?status=${statusFilter}` : ''}`),
         j('/api/admin/uploads'),
@@ -344,10 +475,12 @@ function Dashboard() {
         j('/api/admin/newsletter'),
         j('/api/admin/payments'),
         j('/api/admin/products'),
+        j('/api/admin/gallery'),
       ])
       setStats(s); setOrders(o.orders || []); setUploads(u.uploads || [])
       setContacts(c.contacts || []); setSubs(n.subscribers || []); setPayments(p.payments || [])
       setProducts(pr.products || [])
+      if (Array.isArray(gallery.images)) setGalleryImages(gallery.images)
     } catch (e) { toast.error('Failed to load data') }
     finally { setBusy(false) }
   }
@@ -419,6 +552,9 @@ function Dashboard() {
             </TabsTrigger>
             <TabsTrigger value="uploads" className="rounded-full data-[state=active]:bg-terracotta data-[state=active]:text-white px-4">
               <ImageIcon className="h-4 w-4 mr-2" /> Uploads
+            </TabsTrigger>
+            <TabsTrigger value="gallery" className="rounded-full data-[state=active]:bg-terracotta data-[state=active]:text-white px-4" data-testid="tab-gallery">
+              <ImageIcon className="h-4 w-4 mr-2" /> Gallery
             </TabsTrigger>
             <TabsTrigger value="contacts" className="rounded-full data-[state=active]:bg-terracotta data-[state=active]:text-white px-4">
               <MessageSquare className="h-4 w-4 mr-2" /> Contacts
@@ -604,6 +740,14 @@ function Dashboard() {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="gallery" className="space-y-6">
+            <GallerySettings
+              uploads={uploads}
+              initialImages={galleryImages}
+              onSaved={setGalleryImages}
+            />
           </TabsContent>
 
           {/* Contacts */}

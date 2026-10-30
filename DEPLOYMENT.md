@@ -403,15 +403,18 @@ Products are stored in the `products` table; stock changes are audited in
 
 Recommended production hardening:
 
-- Take nightly `mysqldump` backups (see §12) so `products` and
-  `inventory_movements` are recoverable.
+- Take nightly `mysqldump` backups (see §12) so `products`,
+  `inventory_movements`, and storefront configuration in `site_settings` are
+  recoverable.
 - Rotate `ADMIN_PASSWORD` after any staff change; the `sk_admin` cookie is
   HMAC-signed against `ADMIN_SESSION_SECRET` (fall-through: `ADMIN_PASSWORD`).
 - If you migrate from a pre-persistence install, `node scripts/init-db.js`
   (safe to re-run) creates the new tables, migrates `per_piece`, `per_pair`,
   and `per_bouquet` on existing product tables, and seeds from the legacy
-  `lib/products.js` file if the table is empty. The sync script also creates
-  and migrates these price-unit columns in the target database before copying.
+  `lib/products.js` file if the table is empty. It also creates the
+  `site_settings` table used for gallery configuration.
+  `node scripts/sync-products.js` also ensures the target has the
+  `site_settings` table, but it does not copy gallery selections.
 
 For the full API surface (list / create / update / delete / stock adjust /
 movement history), see the *Managing products & inventory* section of the

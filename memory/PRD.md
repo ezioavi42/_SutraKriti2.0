@@ -26,6 +26,8 @@
     the selected unit.
   - `inventory_movements` — append-only audit trail with `delta`,
     `reason`, `note`, `resulting_quantity`. FK → `products.id`.
+  - `site_settings` — persistent storefront configuration, including ordered
+    gallery image selections.
 - **Data access**: `lib/productsDb.js` (list/get/create/update/delete +
   `adjustStock` with transactional `SELECT … FOR UPDATE`).
 - **Seeding**: on first API request (or via `node scripts/init-db.js`)
@@ -44,6 +46,10 @@
   filterable table, `New product` / `Edit` / `Delete` / `Stock`
   actions, and a stock dialog offering `Adjust (+/-)` or `Set exact`
   with reasons, plus inline movement history.
+- **Storefront gallery**: `/admin` → **Gallery** allows admins to select and
+  reorder images from the defaults or uploaded image library. Changes persist
+  in `site_settings`; deleting a selected upload removes it from the saved
+  gallery, which returns to defaults if no selected images remain.
 
 ## What's been implemented
 

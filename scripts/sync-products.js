@@ -63,6 +63,14 @@ async function main() {
   const targetConn = await mysql.createConnection(targetConfig)
 
   try {
+    await ensureTable(targetConn, 'site_settings', `
+      CREATE TABLE IF NOT EXISTS site_settings (
+        setting_key VARCHAR(64) PRIMARY KEY,
+        setting_value MEDIUMTEXT NOT NULL,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `)
+
     await ensureTable(targetConn, 'products', `
       CREATE TABLE IF NOT EXISTS products (
         id VARCHAR(64) PRIMARY KEY,

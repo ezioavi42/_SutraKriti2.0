@@ -74,6 +74,11 @@ async function main() {
       size_bytes INT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    `CREATE TABLE IF NOT EXISTS site_settings (
+      setting_key VARCHAR(64) PRIMARY KEY,
+      setting_value MEDIUMTEXT NOT NULL,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
     `CREATE TABLE IF NOT EXISTS products (
       id VARCHAR(64) PRIMARY KEY,
       name VARCHAR(255) NOT NULL,

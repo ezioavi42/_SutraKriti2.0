@@ -403,6 +403,18 @@ so the storefront needs no changes. The row is also enriched with `isActive`,
 ### `GET /api/products/:id`
 Single product by id — `404` if missing or inactive.
 
+### `GET /api/gallery`
+Returns the selected storefront gallery image URLs. Before the admin first saves
+a selection, the existing built-in gallery images are returned.
+
+### `GET /api/admin/gallery` and `PUT /api/admin/gallery`
+Admin-authenticated gallery selection and persistence. The PUT body is
+`{ "images": ["/products/flowers/example.webp", ...] }`; select 1–30 distinct
+image URLs from the built-in gallery or image library (unknown URLs are
+rejected). The storefront reflects the saved image order. Deleting a selected
+upload removes that image from the gallery; if it was the last image, the
+storefront returns to the built-in gallery.
+
 ### `POST /api/custom-order`
 Custom enquiry. Body:
 ```json
@@ -583,6 +595,7 @@ Auto-created on first request; also via `node scripts/init-db.js`.
 | `contacts` | Contact-form submissions |
 | `newsletter` | Email subscribers (email is PK) |
 | `payments` | Razorpay orders & verification results |
+| `site_settings` | Storefront configuration, including the ordered gallery image URL list |
 | `uploads` | Metadata for every uploaded product image |
 
 All UTF-8 mb4, InnoDB, UUID primary keys (where applicable).
