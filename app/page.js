@@ -22,15 +22,26 @@ const IG_URL = 'https://www.instagram.com/_sutrakriti'
 const EMAIL = 'info@sutrakriti.com'
 
 const CATEGORIES = ['All', ...PRODUCT_CATEGORIES.map(category => category.name)]
+const getPriceUnit = product => product.perPiece ? 'per Piece' : product.perPair ? 'per Pair' : product.perBouquet ? 'per Bouquet' : ''
 const formatPrice = product => {
-  const unit = product.perPiece ? 'per Piece' : product.perPair ? 'per Pair' : product.perBouquet ? 'per Bouquet' : ''
+  const unit = getPriceUnit(product)
   return `₹${Number(product.price).toLocaleString('en-IN')}${unit ? ` ${unit}` : ''}`
+}
+
+function ProductPrice({ product, className = '' }) {
+  const unit = getPriceUnit(product)
+  return (
+    <span className={`inline-flex min-w-0 flex-col ${className}`}>
+      <span className="whitespace-nowrap">₹{Number(product.price).toLocaleString('en-IN')}</span>
+      {unit && <span className="text-[0.75em] leading-tight">{unit}</span>}
+    </span>
+  )
 }
 
 const GALLERY = [
   { src: '/products/potli-bags/1785704321354-31e278e6-bag4.png', h: 360 },
   { src: 'https://images.unsplash.com/photo-1645516956968-dee62f4a9090', h: 360 },
-  { src: '/products/handbags/1785703835516-0fab7167-img-8892.png', h: 520 },
+  { src: '/products/flowers/1785536229648-3bbd6fde-img-8876.png', h: 520 },
   { src: 'https://images.pexels.com/photos/20269075/pexels-photo-20269075.jpeg', h: 380 },
   { src: 'https://images.unsplash.com/photo-1571434976902-a6e3e1eb0d51', h: 440 },
   { src: 'https://images.pexels.com/photos/32452334/pexels-photo-32452334.jpeg', h: 400 },
@@ -58,7 +69,7 @@ const PROCESS = [
 ]
 
 const WHYS = [
-  { icon: Heart, title: '100% Handmade', text: 'Every piece touched only by artisan hands. No machines, no shortcuts.' },
+  { icon: Heart, title: '100% Handmade', text: 'Every piece is crafted by hand. No machines, no shortcuts.' },
   { icon: Leaf, title: 'Eco-Conscious', text: 'Natural fibres, minimal waste, and packaging you can compost.' },
   { icon: Sparkles, title: 'One of One', text: 'No two SutraKriti creations are ever exactly alike.' },
   { icon: Palette, title: 'Made For You', text: 'Colours, sizes and stories customised to your world.' },
@@ -538,7 +549,9 @@ function Collections({ products, onView }) {
                 <div>
                   <div className="text-[10px] tracking-[0.3em] uppercase opacity-80">{p.category}</div>
                   <div className="font-serif text-2xl md:text-3xl mt-1">{p.name}</div>
-                  <div className="mt-1 text-sm opacity-90">{formatPrice(p)}</div>
+                  <div className="mt-1 text-sm opacity-90">
+                    <ProductPrice product={p} />
+                  </div>
                 </div>
                 <span className="h-10 w-10 rounded-full bg-white/15 border border-white/30 backdrop-blur flex items-center justify-center opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all">
                   <ArrowUpRight className="h-4 w-4" />
@@ -598,12 +611,14 @@ function Catalogue({ products, onView }) {
                   <span className="h-8 w-8 rounded-full bg-terracotta text-white flex items-center justify-center"><ArrowUpRight className="h-4 w-4" /></span>
                 </div>
               </div>
-              <div className="mt-3 flex items-start justify-between gap-3">
-                <div>
+              <div className="mt-3 flex min-w-0 flex-col items-start gap-1 md:flex-row md:justify-between md:gap-3">
+                <div className="min-w-0">
                   <div className="text-[10px] tracking-[0.2em] uppercase text-charcoal/50">{p.category}</div>
-                  <div className="font-serif text-lg text-charcoal">{p.name}</div>
+                  <div className="font-serif text-lg text-charcoal break-words">{p.name}</div>
                 </div>
-                <div className="font-serif text-lg text-terracotta whitespace-nowrap">{formatPrice(p)}</div>
+                <div className="font-serif text-lg text-terracotta">
+                  <ProductPrice product={p} />
+                </div>
               </div>
             </button>
           ))}
@@ -1063,7 +1078,9 @@ Thank you!`
               <DialogHeader className="mt-2 p-0">
                 <DialogTitle className="font-serif text-3xl text-charcoal text-left">{product.name}</DialogTitle>
               </DialogHeader>
-              <div className="mt-1 font-serif text-2xl text-terracotta">{formatPrice(product)}</div>
+              <div className="mt-1 font-serif text-2xl text-terracotta">
+                <ProductPrice product={product} />
+              </div>
               <p className="mt-4 text-charcoal/70 leading-relaxed">{product.description}</p>
               <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
                 <Info label="Material" value={product.material} />
