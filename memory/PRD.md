@@ -50,6 +50,16 @@
   reorder images from the defaults or uploaded image library. Changes persist
   in `site_settings`; deleting a selected upload removes it from the saved
   gallery, which returns to defaults if no selected images remain.
+- **Ordering flow**: products are added to a browser-local cart; multi-colour
+  variants require a colour choice, and every cart line requires an explicit
+  positive whole-number quantity. Name, email, delivery address, and billing
+  address are required before submission. The validated order is persisted
+  before WhatsApp opens; all displayed product prices include delivery charges.
+  Payment is UPI only for now and the message requests UPI details. Admin
+  acceptance requires reviewed addresses, payment received, and
+  availability recorded for each line; partial availability is supported.
+  Acceptance emails final order details, and marking ready sends a second email
+  with a branded PDF invoice.
 
 ## What's been implemented
 
@@ -83,7 +93,8 @@
 - **P1** — Wire stock deductions to Razorpay `verify` (auto-decrement
   on successful payment).
 - **P1** — Storefront: greyed-out "Out of stock" badge on product
-  cards / disable "Buy Now" when `stockQuantity === 0`.
+  cards / disable adding unavailable items to the WhatsApp cart when
+  `stockQuantity === 0`.
 - **P2** — CSV import/export of products & inventory.
 - **P2** — Email alert to `ORDERS_EMAIL` when a product crosses its
   low-stock threshold.

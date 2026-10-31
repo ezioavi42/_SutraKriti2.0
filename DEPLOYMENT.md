@@ -75,7 +75,7 @@ MYSQL_USER=youracct_sk
 MYSQL_PASSWORD=your-strong-password
 MYSQL_DATABASE=youracct_sutrakriti
 
-# Razorpay (leave empty to keep Buy Now disabled)
+# Optional legacy Razorpay order API (storefront orders are submitted via WhatsApp)
 RAZORPAY_KEY_ID=
 RAZORPAY_KEY_SECRET=
 NEXT_PUBLIC_BUY_NOW_ENABLED=false
@@ -296,17 +296,31 @@ a category, drop your files. Auth is your `sk_admin` cookie — no token exposed
 
 ---
 
-## 11. Enabling Razorpay in production
+## 11. WhatsApp cart ordering and optional Razorpay API
 
-1. In Razorpay Dashboard → **Account & Settings → API Keys**, generate **Live** keys.
-2. In mPanel → **Environment Variables** for the Node.js app:
-   ```
-   RAZORPAY_KEY_ID=rzp_live_...
-   RAZORPAY_KEY_SECRET=...
-   NEXT_PUBLIC_BUY_NOW_ENABLED=true
-   ```
-3. Click **Restart**.
-4. Verify by opening a product → you should now see **Buy Now** alongside **Order on WhatsApp**.
+The storefront collects products in the customer's browser cart and sends the
+final itemized order to WhatsApp. Customers must choose a colour when a product
+has multiple variants and enter a positive quantity for every cart item before
+the WhatsApp action is enabled. Before submission, customers also provide their
+name, email, delivery address, and billing address. The order and its item/price
+snapshots are persisted before WhatsApp opens. Cart items do not reserve stock.
+All displayed product prices, cart line totals, order totals, confirmation
+emails, and invoices include delivery charges; no separate delivery charge is
+added at checkout. The storefront and WhatsApp order template state that UPI is
+the only supported payment method for now and request UPI details.
+
+Configure SMTP and `ORDERS_EMAIL` before accepting cart orders. In `/admin` →
+**WhatsApp Orders**, review each requested quantity and enter the available
+quantity for every line (use zero for unavailable items). Confirm the delivery
+and billing addresses and mark UPI payment received. Only then can an order
+with at least one available item be accepted; acceptance emails the confirmed
+order details to the customer from `ORDERS_EMAIL`. When ready, choose **Mark
+Ready & Email Invoice** to generate and attach a SutraKriti-logo PDF invoice
+and send the second email. Mark delivered after handoff.
+
+The Razorpay order API remains separately gated for future integration and is
+not used by this storefront flow. Setting `NEXT_PUBLIC_BUY_NOW_ENABLED` and
+Razorpay keys does not enable a product-modal Buy Now button.
 
 ---
 
@@ -381,7 +395,7 @@ CMD ["npm", "start"]
 |---|---|
 | `Access denied for user '...'@'localhost'` on first API call | Wrong `MYSQL_USER/PASSWORD`; run `node scripts/init-db.js` manually to reproduce. |
 | API works but email never arrives | Check `curl /api/health` → `mail: true`. If false, SMTP env vars are missing. Otherwise check Outlook “Sent” + junk folder; for Outlook, use an **app password**, not your account password. |
-| Buy Now stays hidden even after adding keys | `NEXT_PUBLIC_BUY_NOW_ENABLED` must be `true` **and** you must restart the app so Next.js re-reads env vars at build/render time. |
+| Shopper cannot see cart items on another device | The cart is stored in browser local storage and does not sync across browsers or devices. |
 | Uploads return `401 unauthorised` | Header `x-upload-token` must match `UPLOAD_TOKEN` in `.env`. |
 | Images 404 after upload | Ensure `public/products/` is writable (`chmod 755`) and the Passenger user owns it. |
 | Site returns 502 after `yarn build` | `.next/` was built with a different Node version. Rebuild inside the same virtualenv. |

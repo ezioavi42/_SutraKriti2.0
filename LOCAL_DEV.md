@@ -190,17 +190,25 @@ Check `curl http://localhost:3000/api/health` → `"mail": true`.
 
 ---
 
-## 8. Enabling Buy Now (Razorpay) locally
+## 8. Storefront cart ordering
 
-1. Sign in to <https://dashboard.razorpay.com> → API Keys → generate **Test Mode** keys.
-2. Add to `.env`:
-   ```env
-   RAZORPAY_KEY_ID=rzp_test_xxxxxxxx
-   RAZORPAY_KEY_SECRET=xxxxxxxxxxxxxx
-   NEXT_PUBLIC_BUY_NOW_ENABLED=true
-   ```
-3. Restart `yarn dev`. The **Buy Now** button now appears in every product modal.
-4. Test with Razorpay [test cards](https://razorpay.com/docs/payments/payments/test-card-details/) — no real money moves.
+Select a product, choose a colour if it has multiple variants, and add it to
+the cart. On `/cart`, enter a positive whole-number quantity for each item and
+review the itemized order. Enter your name, email, delivery address, and billing
+address before placing the order. The order is saved in MySQL before WhatsApp
+opens. All product prices and order totals include delivery charges; there is
+no additional delivery fee. UPI is the only supported payment method for now,
+and the WhatsApp message asks the studio to send UPI details.
+
+In `/admin` → **WhatsApp Orders**, enter availability for every item, confirm
+both addresses, and mark UPI payment received before accepting an order.
+Acceptance sends the final confirmed order details to the customer's email.
+When the order is ready, mark it ready to send the second email with the PDF
+invoice. `ORDERS_EMAIL` must be set alongside SMTP settings for these messages.
+Adding a cart item does not reserve stock.
+
+The Razorpay order API remains gated for future integration. Configuring its
+keys does not change the storefront's WhatsApp cart submission flow.
 
 ---
 
@@ -309,7 +317,7 @@ sudo mysql -usutrakriti -psutrakriti_dev_pw sutrakriti
 | `Access denied for user 'root'@'localhost'` | Use the dedicated `sutrakriti` user (see 4.1). |
 | `ECONNREFUSED 127.0.0.1:3306` | MariaDB isn't running: `brew services start mariadb` (macOS) or `sudo service mariadb start` (Linux). |
 | `EADDRINUSE :3000` | Another process on 3000. Kill it or `PORT=3001 yarn dev`. |
-| Buy Now still hidden after env changes | Restart `yarn dev` — Next.js reads env at boot. |
+| Cart is missing products | The cart is stored in browser local storage and does not sync across browsers or devices. |
 | Uploads land in DB but not on disk | Ensure `public/products/` exists & is writable. |
 | Storefront shows no products | Run `node scripts/init-db.js` — it seeds the `products` table from `lib/products.js` when empty. |
 | Stock button returns `insufficient_stock` | Deltas cannot drive stock below 0. Use *Set exact* to override, or top up first with a positive delta. |

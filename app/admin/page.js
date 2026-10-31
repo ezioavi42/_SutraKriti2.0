@@ -8,6 +8,7 @@ import {
   Image as ImageIcon, Users, MessageSquare, CreditCard, ClipboardList, Undo2,
   ExternalLink, StickyNote, ShieldCheck, Sparkles, Package, Plus, Minus,
   Pencil, Boxes, AlertTriangle, PackageX, PackagePlus, ArrowUp, ArrowDown,
+  Truck, FileText, ShoppingBag,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -30,6 +31,7 @@ function StatusBadge({ status }) {
   const map = {
     new:       { label: 'New',       className: 'bg-sage/25 text-sage-dark border border-sage/40 text-charcoal' },
     accepted:  { label: 'Accepted',  className: 'bg-terracotta/15 text-terracotta-dark border border-terracotta/40' },
+    ready:     { label: 'Ready',     className: 'bg-sage/20 text-sage-dark border border-sage/40 text-charcoal' },
     completed: { label: 'Completed', className: 'bg-charcoal text-cream border-0' },
   }
   const c = map[status] || map.new
@@ -197,6 +199,214 @@ function OrderDialog({ order, onClose, onUpdated }) {
           {order.status !== 'accepted' && order.status !== 'completed' && (
             <Button onClick={() => act('accept')} disabled={busy} className="rounded-full bg-terracotta hover:bg-[color:var(--sk-terracotta-dark)] text-white">
               <Send className="mr-2 h-4 w-4" /> Accept &amp; Email
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function StoreOrderDialog({ order, onClose, onUpdated }) {
+  const [deliveryAddress, setDeliveryAddress] = useState(order.delivery_address || '')
+  const [billingAddress, setBillingAddress] = useState(order.billing_address || '')
+  const [addressesConfirmed, setAddressesConfirmed] = useState(!!order.addresses_confirmed)
+  const [paymentReceived, setPaymentReceived] = useState(!!order.payment_received)
+  const [available, setAvailable] = useState(() => Object.fromEntries(
+    order.items.map(item => [item.id, item.available_quantity ?? ''])
+  ))
+  const [busy, setBusy] = useState(false)
+
+  const reviewedQuantities = order.items.map(item => {
+    const raw = available[item.id]
+    return raw === '' || raw === undefined ? null : Number(raw)
+  })
+  const availabilityComplete = reviewedQuantities.every((quantity, index) =>
+    Number.isSafeInteger(quantity) && quantity >= 0 && quantity <= Number(order.items[index].requested_quantity)
+  )
+  const hasAvailableItems = reviewedQuantities.some(quantity => Number.isSafeInteger(quantity) && quantity > 0)
+  const availableTotal = order.items.reduce((sum, item) =>
+    sum + Number(item.unit_price) * (Number(available[item.id]) || 0), 0
+  )
+  const canAccept = Boolean(
+    deliveryAddress.trim() && billingAddress.trim() && addressesConfirmed && paymentReceived &&
+    availabilityComplete && hasAvailableItems
+  )
+
+  const act = async action => {
+    setBusy(true)
+    try {
+      const response = await fetch(`/api/admin/store-orders/${order.id}/action`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action,
+          deliveryAddress,
+          billingAddress,
+          addressesConfirmed,
+          paymentReceived,
+          items: order.items.map(item => ({
+            id: item.id,
+            availableQuantity: available[item.id] ?? '',
+          })),
+        }),
+      })
+      const result = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        toast.error(result.message || result.error || 'Order action failed.')
+        return
+      }
+      if (action === 'save') toast.success('Order review saved.')
+      if (action === 'accept') toast.success('Order accepted and final details emailed.')
+      if (action === 'ready') toast.success('Invoice PDF emailed to the customer.')
+      if (action === 'complete') toast.success('Order marked delivered.')
+      onUpdated?.(result.order)
+      onClose()
+    } catch (error) {
+      toast.error(error.message || 'Order action failed.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Dialog open={!!order} onOpenChange={onClose}>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-cream border-beige">
+        <DialogHeader>
+          <div className="flex items-center gap-2 text-[10px] tracking-[0.3em] uppercase text-terracotta">
+            WhatsApp Order · <StatusBadge status={order.status} />
+          </div>
+          <DialogTitle className="font-serif text-2xl text-charcoal">{order.customer_name}</DialogTitle>
+          <DialogDescription className="text-charcoal/70">
+            Order SK-{String(order.id).slice(0, 8).toUpperCase()} · Received {fmt(order.created_at)}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid gap-3 sm:grid-cols-2 text-sm">
+          <div className="rounded-lg border border-beige bg-ivory p-3">
+            <div className="text-[10px] tracking-[0.2em] uppercase text-charcoal/50">Email</div>
+            <a className="break-all text-terracotta underline" href={`mailto:${order.email}`}>{order.email}</a>
+          </div>
+          <div className="rounded-lg border border-beige bg-ivory p-3">
+            <div className="text-[10px] tracking-[0.2em] uppercase text-charcoal/50">Customer requested total</div>
+            <div className="font-medium">₹{Number(order.total_amount).toLocaleString('en-IN')}</div>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto rounded-xl border border-beige bg-ivory">
+          <table className="w-full min-w-[620px] text-sm">
+            <thead className="bg-beige/50 text-left text-[10px] uppercase tracking-wider text-charcoal/60">
+              <tr>
+                <th className="p-3">Product</th><th className="p-3">Colour</th><th className="p-3">Requested</th>
+                <th className="p-3">Unit price</th><th className="p-3">Available quantity</th>
+              </tr>
+            </thead>
+            <tbody>
+              {order.items.map(item => (
+                <tr key={item.id} className="border-t border-beige">
+                  <td className="p-3">{item.product_name}</td>
+                  <td className="p-3">{item.colour || '—'}</td>
+                  <td className="p-3">{item.requested_quantity}</td>
+                  <td className="p-3">₹{Number(item.unit_price).toLocaleString('en-IN')}{item.price_unit ? ` ${item.price_unit}` : ''}</td>
+                  <td className="p-3">
+                    <Input
+                      type="number"
+                      min="0"
+                      max={item.requested_quantity}
+                      step="1"
+                      inputMode="numeric"
+                      aria-label={`Available quantity for ${item.product_name}`}
+                      value={available[item.id] ?? ''}
+                      onChange={event => setAvailable({ ...available, [item.id]: event.target.value })}
+                      disabled={order.status !== 'new'}
+                      className="h-10 w-28 bg-cream border-beige"
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="flex items-center justify-between rounded-lg border border-beige bg-ivory p-3 text-sm">
+          <span className="text-charcoal/70">Available-items total (acceptance email and invoice)</span>
+          <strong>₹{availableTotal.toLocaleString('en-IN')}</strong>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="block text-xs text-charcoal/70">
+            Delivery address <span className="text-red-600">*</span>
+            <Textarea
+              value={deliveryAddress}
+              onChange={event => { setDeliveryAddress(event.target.value); setAddressesConfirmed(false) }}
+              maxLength={2000}
+              disabled={order.status !== 'new'}
+              className="mt-1 min-h-24 bg-ivory border-beige"
+            />
+          </label>
+          <label className="block text-xs text-charcoal/70">
+            Billing address <span className="text-red-600">*</span>
+            <Textarea
+              value={billingAddress}
+              onChange={event => { setBillingAddress(event.target.value); setAddressesConfirmed(false) }}
+              maxLength={2000}
+              disabled={order.status !== 'new'}
+              className="mt-1 min-h-24 bg-ivory border-beige"
+            />
+          </label>
+        </div>
+
+        {order.status === 'new' && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="flex items-start gap-2 rounded-lg border border-beige bg-ivory p-3 text-sm">
+              <input
+                type="checkbox"
+                checked={addressesConfirmed}
+                onChange={event => setAddressesConfirmed(event.target.checked)}
+                className="mt-0.5 h-4 w-4 accent-[color:var(--sk-terracotta)]"
+              />
+              <span>I reviewed and confirmed both addresses.</span>
+            </label>
+            <label className="flex items-start gap-2 rounded-lg border border-beige bg-ivory p-3 text-sm">
+              <input
+                type="checkbox"
+                checked={paymentReceived}
+                onChange={event => setPaymentReceived(event.target.checked)}
+                className="mt-0.5 h-4 w-4 accent-[color:var(--sk-terracotta)]"
+              />
+              <span>UPI payment received in full for the available items.</span>
+            </label>
+          </div>
+        )}
+
+        <div className="rounded-lg border border-terracotta/20 bg-ivory p-3 text-xs leading-relaxed text-charcoal/70">
+          Acceptance requires a reviewed delivery and billing address, payment marked received, and an available quantity entered for every item. Setting a line to zero records that item as unavailable; accepting a partial order emails only the available quantities.
+        </div>
+
+        {order.acceptance_email_sent_at && (
+          <div className="text-xs text-charcoal/60">Acceptance email sent {fmt(order.acceptance_email_sent_at)}</div>
+        )}
+        {order.ready_email_sent_at && (
+          <div className="text-xs text-charcoal/60">Invoice and ready-for-delivery email sent {fmt(order.ready_email_sent_at)}</div>
+        )}
+
+        <DialogFooter className="flex-wrap gap-2">
+          {order.status === 'new' && (
+            <>
+              <Button onClick={() => act('save')} disabled={busy} variant="outline" className="rounded-full">Save review</Button>
+              <Button onClick={() => act('accept')} disabled={busy || !canAccept} className="rounded-full bg-terracotta hover:bg-[color:var(--sk-terracotta-dark)] text-white">
+                <Send className="mr-2 h-4 w-4" /> Accept &amp; Email Details
+              </Button>
+            </>
+          )}
+          {order.status === 'accepted' && (
+            <Button onClick={() => act('ready')} disabled={busy} className="rounded-full bg-terracotta hover:bg-[color:var(--sk-terracotta-dark)] text-white">
+              <FileText className="mr-2 h-4 w-4" /> Mark Ready &amp; Email Invoice
+            </Button>
+          )}
+          {order.status === 'ready' && (
+            <Button onClick={() => act('complete')} disabled={busy} className="rounded-full bg-charcoal hover:bg-black text-cream">
+              <Truck className="mr-2 h-4 w-4" /> Mark Delivered
             </Button>
           )}
         </DialogFooter>
@@ -449,6 +659,7 @@ function Dashboard() {
 
   const [stats, setStats] = useState(null)
   const [orders, setOrders] = useState([])
+  const [storeOrders, setStoreOrders] = useState([])
   const [uploads, setUploads] = useState([])
   const [contacts, setContacts] = useState([])
   const [subs, setSubs] = useState([])
@@ -460,6 +671,7 @@ function Dashboard() {
   const [search, setSearch] = useState('')
   const [uploadCat, setUploadCat] = useState('all')
   const [selectedOrder, setSelectedOrder] = useState(null)
+  const [selectedStoreOrder, setSelectedStoreOrder] = useState(null)
   const [productDialog, setProductDialog] = useState(null) // { mode:'create'|'edit', product }
   const [stockDialog, setStockDialog] = useState(null)     // product object
 
@@ -467,9 +679,10 @@ function Dashboard() {
     setBusy(true)
     try {
       const j = async (u) => (await fetch(u, { credentials: 'include' })).json()
-      const [s, o, u, c, n, p, pr, gallery] = await Promise.all([
+      const [s, o, so, u, c, n, p, pr, gallery] = await Promise.all([
         j('/api/admin/stats'),
         j(`/api/admin/custom-orders${statusFilter !== 'all' ? `?status=${statusFilter}` : ''}`),
+        j('/api/admin/store-orders'),
         j('/api/admin/uploads'),
         j('/api/admin/contacts'),
         j('/api/admin/newsletter'),
@@ -478,6 +691,7 @@ function Dashboard() {
         j('/api/admin/gallery'),
       ])
       setStats(s); setOrders(o.orders || []); setUploads(u.uploads || [])
+      setStoreOrders(so.orders || [])
       setContacts(c.contacts || []); setSubs(n.subscribers || []); setPayments(p.payments || [])
       setProducts(pr.products || [])
       if (Array.isArray(gallery.images)) setGalleryImages(gallery.images)
@@ -493,6 +707,15 @@ function Dashboard() {
       [o.name, o.contact, o.email, o.product_type, o.occasion, o.notes].filter(Boolean).some(v => String(v).toLowerCase().includes(q))
     )
   }, [orders, search])
+
+  const filteredStoreOrders = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return storeOrders
+    return storeOrders.filter(order =>
+      [order.customer_name, order.email, order.id, ...order.items.map(item => item.product_name)]
+        .filter(Boolean).some(value => String(value).toLowerCase().includes(q))
+    )
+  }, [storeOrders, search])
 
   const filteredUploads = useMemo(() => {
     if (uploadCat === 'all') return uploads
@@ -540,7 +763,7 @@ function Dashboard() {
 
       <main className="container py-8">
         <Tabs value={tab} onValueChange={setTab} className="w-full">
-          <TabsList className="bg-ivory border border-beige rounded-full p-1 h-11 mb-6 flex-wrap">
+          <TabsList className="bg-ivory border border-beige rounded-2xl p-1 min-h-11 h-auto mb-6 flex-wrap gap-1">
             <TabsTrigger value="overview" className="rounded-full data-[state=active]:bg-terracotta data-[state=active]:text-white px-4">
               <ClipboardList className="h-4 w-4 mr-2" /> Overview
             </TabsTrigger>
@@ -549,6 +772,9 @@ function Dashboard() {
             </TabsTrigger>
             <TabsTrigger value="orders" className="rounded-full data-[state=active]:bg-terracotta data-[state=active]:text-white px-4">
               Custom Orders {stats?.orders?.pending ? <span className="ml-2 inline-flex items-center justify-center h-5 min-w-5 px-1.5 rounded-full bg-sage/25 text-[11px]">{stats.orders.pending}</span> : null}
+            </TabsTrigger>
+            <TabsTrigger value="store-orders" className="rounded-full data-[state=active]:bg-terracotta data-[state=active]:text-white px-4" data-testid="tab-store-orders">
+              <ShoppingBag className="h-4 w-4 mr-2" /> WhatsApp Orders {storeOrders.filter(order => order.status === 'new').length ? <span className="ml-2 inline-flex items-center justify-center h-5 min-w-5 px-1.5 rounded-full bg-sage/25 text-[11px]">{storeOrders.filter(order => order.status === 'new').length}</span> : null}
             </TabsTrigger>
             <TabsTrigger value="uploads" className="rounded-full data-[state=active]:bg-terracotta data-[state=active]:text-white px-4">
               <ImageIcon className="h-4 w-4 mr-2" /> Uploads
@@ -685,6 +911,63 @@ function Dashboard() {
             </Card>
           </TabsContent>
 
+          <TabsContent value="store-orders">
+            <Card className="bg-ivory border-beige">
+              <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <CardTitle className="font-serif text-xl text-charcoal">WhatsApp cart orders</CardTitle>
+                  <p className="mt-1 text-sm text-charcoal/60">Review availability, UPI payment, and addresses before accepting.</p>
+                </div>
+                <div className="relative">
+                  <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-charcoal/40" />
+                  <Input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search customer or item…" className="pl-9 h-9 bg-cream border-beige w-64" />
+                </div>
+              </CardHeader>
+              <CardContent className="p-0 overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent border-beige">
+                      <TableHead className="text-[10px] tracking-[0.2em] uppercase text-charcoal/60">Received</TableHead>
+                      <TableHead className="text-[10px] tracking-[0.2em] uppercase text-charcoal/60">Order / Customer</TableHead>
+                      <TableHead className="text-[10px] tracking-[0.2em] uppercase text-charcoal/60">Items</TableHead>
+                      <TableHead className="text-[10px] tracking-[0.2em] uppercase text-charcoal/60">Requested total</TableHead>
+                      <TableHead className="text-[10px] tracking-[0.2em] uppercase text-charcoal/60">Payment</TableHead>
+                      <TableHead className="text-[10px] tracking-[0.2em] uppercase text-charcoal/60">Status</TableHead>
+                      <TableHead className="text-right text-[10px] tracking-[0.2em] uppercase text-charcoal/60">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredStoreOrders.map(order => (
+                      <TableRow key={order.id} className="border-beige hover:bg-cream/50">
+                        <TableCell className="whitespace-nowrap text-charcoal/70">{fmtDate(order.created_at)}</TableCell>
+                        <TableCell>
+                          <div className="font-medium">SK-{String(order.id).slice(0, 8).toUpperCase()} · {order.customer_name}</div>
+                          <a className="break-all text-xs text-terracotta underline" href={`mailto:${order.email}`}>{order.email}</a>
+                        </TableCell>
+                        <TableCell className="text-charcoal/80">
+                          {order.items.map(item => `${item.product_name}${item.colour ? ` (${item.colour})` : ''} × ${item.requested_quantity}`).join(', ')}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">₹{Number(order.total_amount).toLocaleString('en-IN')}</TableCell>
+                        <TableCell>
+                          <Badge className={`rounded-full border text-[10px] uppercase tracking-wider ${order.payment_received ? 'border-sage/40 bg-sage/20 text-charcoal' : 'border-beige bg-cream text-charcoal/60'}`}>
+                            {order.payment_received ? 'UPI received' : 'Pending'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell><StatusBadge status={order.status} /></TableCell>
+                        <TableCell className="text-right">
+                          <Button size="sm" variant="ghost" onClick={() => setSelectedStoreOrder(order)}>Review →</Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {filteredStoreOrders.length === 0 && (
+                      <TableRow><TableCell colSpan={7} className="py-10 text-center text-charcoal/50">No WhatsApp cart orders yet.</TableCell></TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           {/* Uploads */}
           <TabsContent value="uploads" className="space-y-6">
             <UploadPanel onUploaded={loadAll} />
@@ -794,6 +1077,14 @@ function Dashboard() {
       </main>
 
       <OrderDialog order={selectedOrder} onClose={() => setSelectedOrder(null)} onUpdated={() => loadAll()} />
+      {selectedStoreOrder && (
+        <StoreOrderDialog
+          key={selectedStoreOrder.id}
+          order={selectedStoreOrder}
+          onClose={() => setSelectedStoreOrder(null)}
+          onUpdated={() => loadAll()}
+        />
+      )}
       <ProductDialog
         state={productDialog}
         onClose={() => setProductDialog(null)}

@@ -4,9 +4,16 @@ import crypto from 'crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import sharp from 'sharp'
-import { query, initSchema } from '@/lib/db'
+import { query, initSchema, getPool } from '@/lib/db'
 import { getUploadRoot } from '@/lib/upload-storage'
-import { sendMail, renderCustomOrderEmail, renderOrderAcceptanceEmail, renderCustomerAcknowledgementEmail, isMailConfigured } from '@/lib/mailer'
+import {
+  sendMail, renderCustomOrderEmail, renderOrderAcceptanceEmail,
+  renderCustomerAcknowledgementEmail, renderStoreOrderAcceptanceEmail,
+  renderStoreOrderReadyEmail, isMailConfigured,
+} from '@/lib/mailer'
+import { createOrderInvoicePdf } from '@/lib/order-invoice'
+import { validateStoreOrderReview } from '@/lib/store-order-rules.mjs'
+import { createWhatsAppOrderUrl } from '@/lib/cart'
 import {
   listProducts, getProduct, createProduct, updateProduct, deleteProduct,
   adjustStock, listStockMovements, seedProductsIfEmpty,
@@ -186,6 +193,7 @@ async function handleRoute(request, { params }) {
       route === '/products' ||
       route.startsWith('/products/') ||
       route === '/custom-order' ||
+      route === '/orders' ||
       route === '/contact' ||
       route === '/newsletter' ||
       route === '/upload' ||
@@ -270,6 +278,98 @@ async function handleRoute(request, { params }) {
       }
 
       return ok({ ok: true, id, emailStatus: studioEmailStatus, customerEmailStatus })
+    }
+
+    if (route === '/orders' && method === 'POST') {
+      const body = await request.json().catch(() => null)
+      if (!body || typeof body !== 'object') return err('valid order details required', 400)
+      const customerName = String(body.customerName || '').trim()
+      const email = String(body.email || '').trim().toLowerCase()
+      const deliveryAddress = String(body.deliveryAddress || '').trim()
+      const billingAddress = String(body.billingAddress || '').trim()
+      if (!customerName || customerName.length > 255) return err('customer name required', 400)
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 255) return err('valid email required', 400)
+      if (!deliveryAddress || deliveryAddress.length > 2000) return err('delivery address required (maximum 2000 characters)', 400)
+      if (!billingAddress || billingAddress.length > 2000) return err('billing address required (maximum 2000 characters)', 400)
+      if (!Array.isArray(body.items) || body.items.length < 1 || body.items.length > 100) {
+        return err('order must contain between 1 and 100 items', 400)
+      }
+
+      const catalogue = await listProducts()
+      const productsById = new Map(catalogue.map(product => [product.id, product]))
+      const items = []
+      let totalAmount = 0
+      for (const submitted of body.items) {
+        const product = productsById.get(String(submitted?.productId || ''))
+        if (!product) return err('one or more products are no longer available', 400)
+        const quantity = Number(submitted.quantity)
+        if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > 2147483647) {
+          return err('each item requires a positive whole-number quantity', 400)
+        }
+        const selectedColor = String(submitted.selectedColor || '').trim()
+        if (product.colors.length > 1 && !product.colors.includes(selectedColor)) {
+          return err(`choose an available colour for ${product.name}`, 400)
+        }
+        if (product.colors.length === 1 && selectedColor && selectedColor !== product.colors[0]) {
+          return err(`choose an available colour for ${product.name}`, 400)
+        }
+        const priceUnit = product.perPiece ? 'per Piece'
+          : product.perPair ? 'per Pair'
+            : product.perBouquet ? 'per Bouquet' : ''
+        const unitPrice = Number(product.price)
+        if (!Number.isSafeInteger(unitPrice) || unitPrice < 0) {
+          return err(`invalid price for ${product.name}`, 409)
+        }
+        const lineTotal = unitPrice * quantity
+        if (!Number.isSafeInteger(lineTotal) || !Number.isSafeInteger(totalAmount + lineTotal)) {
+          return err('order total is too large', 400)
+        }
+        totalAmount += lineTotal
+        items.push({
+          id: uuidv4(),
+          productId: product.id,
+          name: product.name,
+          category: product.category || '',
+          selectedColor: selectedColor || product.colors[0] || '',
+          colors: product.colors,
+          price: unitPrice,
+          priceUnit,
+          quantity,
+        })
+      }
+
+      const id = uuidv4()
+      const connection = await getPool().getConnection()
+      try {
+        await connection.beginTransaction()
+        await connection.execute(
+          `INSERT INTO store_orders
+            (id, customer_name, email, delivery_address, billing_address, total_amount)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [id, customerName, email, deliveryAddress, billingAddress, totalAmount]
+        )
+        for (const item of items) {
+          await connection.execute(
+            `INSERT INTO store_order_items
+              (id, order_id, product_id, product_name, category, colour,
+               unit_price, price_unit, requested_quantity)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [item.id, id, item.productId, item.name, item.category || null,
+              item.selectedColor || null, item.price, item.priceUnit || null, item.quantity]
+          )
+        }
+        await connection.commit()
+      } catch (error) {
+        await connection.rollback()
+        throw error
+      } finally {
+        connection.release()
+      }
+
+      const whatsappUrl = createWhatsAppOrderUrl(items, {
+        orderReference: `SK-${id.slice(0, 8).toUpperCase()}`,
+      })
+      return ok({ ok: true, id, whatsappUrl }, 201)
     }
 
     // Contact form
@@ -484,6 +584,164 @@ async function handleRoute(request, { params }) {
           ? await query('SELECT * FROM custom_orders WHERE status=? ORDER BY created_at DESC LIMIT 500', [status])
           : await query('SELECT * FROM custom_orders ORDER BY created_at DESC LIMIT 500')
         return ok({ orders: rows })
+      }
+
+      if (route === '/admin/store-orders' && method === 'GET') {
+        const url = new URL(request.url)
+        const status = url.searchParams.get('status')
+        const orders = status && status !== 'all'
+          ? await query('SELECT * FROM store_orders WHERE status=? ORDER BY created_at DESC LIMIT 500', [status])
+          : await query('SELECT * FROM store_orders ORDER BY created_at DESC LIMIT 500')
+        if (!orders.length) return ok({ orders: [] })
+        const items = await query(
+          `SELECT * FROM store_order_items WHERE order_id IN (${orders.map(() => '?').join(',')})
+           ORDER BY created_at ASC`,
+          orders.map(order => order.id)
+        )
+        const itemsByOrder = new Map(orders.map(order => [order.id, []]))
+        for (const item of items) itemsByOrder.get(item.order_id)?.push(item)
+        return ok({
+          orders: orders.map(order => ({
+            ...order,
+            total_amount: Number(order.total_amount),
+            payment_received: !!order.payment_received,
+            addresses_confirmed: !!order.addresses_confirmed,
+            items: itemsByOrder.get(order.id) || [],
+          })),
+        })
+      }
+
+      const mStoreOrderAction = route.match(/^\/admin\/store-orders\/([^/]+)\/action$/)
+      if (mStoreOrderAction && method === 'POST') {
+        const id = mStoreOrderAction[1]
+        const body = (await request.json().catch(() => ({}))) || {}
+        const action = String(body.action || '').toLowerCase()
+        const orders = await query('SELECT * FROM store_orders WHERE id=? LIMIT 1', [id])
+        if (!orders.length) return err('order not found', 404)
+        const order = orders[0]
+        const items = await query('SELECT * FROM store_order_items WHERE order_id=? ORDER BY created_at ASC', [id])
+
+        if (action === 'complete') {
+          if (order.status !== 'ready') return err('order must be ready for delivery before it can be marked delivered', 409)
+          await query(
+            `UPDATE store_orders SET status='completed', completed_at=CURRENT_TIMESTAMP WHERE id=?`,
+            [id]
+          )
+        } else if (action === 'save' || action === 'accept') {
+          if (order.status !== 'new') return err('order review is locked after acceptance', 409)
+          const paymentReceived = body.paymentReceived === true
+          const addressesConfirmed = body.addressesConfirmed === true
+          const review = validateStoreOrderReview({
+            storedItems: items,
+            submittedItems: body.items,
+            deliveryAddress: body.deliveryAddress,
+            billingAddress: body.billingAddress,
+            paymentReceived,
+            addressesConfirmed,
+            forAcceptance: action === 'accept',
+          })
+          if (!review.ok) return err(review.error, review.status)
+          const { deliveryAddress, billingAddress, items: reviewedItems } = review
+          if (action === 'accept') {
+            if (!isMailConfigured() || !process.env.ORDERS_EMAIL) {
+              return err('order email is not configured; verify SMTP settings and ORDERS_EMAIL', 503)
+            }
+          }
+
+          await query(
+            `UPDATE store_orders
+             SET delivery_address=?, billing_address=?, payment_received=?,
+                 payment_received_at=IF(?, COALESCE(payment_received_at, CURRENT_TIMESTAMP), NULL),
+                 addresses_confirmed=?, addresses_confirmed_at=IF(?, COALESCE(addresses_confirmed_at, CURRENT_TIMESTAMP), NULL)
+             WHERE id=?`,
+            [deliveryAddress, billingAddress, paymentReceived ? 1 : 0, paymentReceived ? 1 : 0,
+              addressesConfirmed ? 1 : 0, addressesConfirmed ? 1 : 0, id]
+          )
+          for (const item of reviewedItems) {
+            await query(
+              'UPDATE store_order_items SET available_quantity=? WHERE id=? AND order_id=?',
+              [item.available_quantity, item.id, id]
+            )
+          }
+
+          if (action === 'accept') {
+            const reviewedOrder = {
+              ...order,
+              customer_name: order.customer_name,
+              delivery_address: deliveryAddress,
+              billing_address: billingAddress,
+              items: reviewedItems,
+            }
+            let emailResult
+            try {
+              const { html, text, subject } = renderStoreOrderAcceptanceEmail(reviewedOrder)
+              emailResult = await sendMail({
+                from: process.env.ORDERS_EMAIL,
+                to: order.email,
+                replyTo: process.env.ORDERS_EMAIL,
+                subject, html, text,
+              })
+            } catch (error) {
+              console.error('[admin] store order acceptance email failed:', error)
+              return err('acceptance_email_failed', 502, {
+                message: 'Order review was saved, but the acceptance email could not be sent. Retry acceptance after checking email delivery.',
+              })
+            }
+            if (!emailResult.ok) return err('acceptance_email_failed', 502, { message: 'Acceptance email was not sent.' })
+            await query(
+              `UPDATE store_orders
+               SET status='accepted', accepted_at=CURRENT_TIMESTAMP,
+                   acceptance_email_sent_at=CURRENT_TIMESTAMP WHERE id=?`,
+              [id]
+            )
+          }
+        } else if (action === 'ready') {
+          if (order.status !== 'accepted') return err('only accepted orders can be marked ready for delivery', 409)
+          if (!isMailConfigured() || !process.env.ORDERS_EMAIL) {
+            return err('order email is not configured; verify SMTP settings and ORDERS_EMAIL', 503)
+          }
+          const readyOrder = { ...order, items }
+          let emailResult
+          try {
+            const { html, text, subject } = renderStoreOrderReadyEmail(readyOrder)
+            const invoice = await createOrderInvoicePdf(readyOrder)
+            emailResult = await sendMail({
+              from: process.env.ORDERS_EMAIL,
+              to: order.email,
+              replyTo: process.env.ORDERS_EMAIL,
+              subject, html, text,
+              attachments: [{
+                filename: `SutraKriti-invoice-SK-${id.slice(0, 8).toUpperCase()}.pdf`,
+                content: invoice,
+                contentType: 'application/pdf',
+              }],
+            })
+          } catch (error) {
+            console.error('[admin] store order ready email failed:', error)
+            return err('ready_email_failed', 502, { message: 'The invoice email could not be sent. The order remains accepted.' })
+          }
+          if (!emailResult.ok) return err('ready_email_failed', 502, { message: 'The invoice email was not sent.' })
+          await query(
+            `UPDATE store_orders SET status='ready', ready_at=CURRENT_TIMESTAMP,
+             ready_email_sent_at=CURRENT_TIMESTAMP WHERE id=?`,
+            [id]
+          )
+        } else {
+          return err('invalid action', 400)
+        }
+
+        const [updatedOrder] = await query('SELECT * FROM store_orders WHERE id=? LIMIT 1', [id])
+        const updatedItems = await query('SELECT * FROM store_order_items WHERE order_id=? ORDER BY created_at ASC', [id])
+        return ok({
+          ok: true,
+          order: {
+            ...updatedOrder,
+            total_amount: Number(updatedOrder.total_amount),
+            payment_received: !!updatedOrder.payment_received,
+            addresses_confirmed: !!updatedOrder.addresses_confirmed,
+            items: updatedItems,
+          },
+        })
       }
 
       // Order actions: accept | complete | reopen | note

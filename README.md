@@ -13,7 +13,8 @@ A production-ready, boutique-quality **Next.js 15 + MySQL** website for SutraKri
 - **Fonts** · Playfair Display (serif) + Cormorant Garamond (italic) + Inter (body) via `next/font/google`
 - **Database** · **MySQL / MariaDB** (no MongoDB dependency)
 - **Persisted product catalogue** · Products live in MySQL — full CRUD from the admin dashboard, with stock quantity, low-stock threshold and an inventory audit trail on every adjustment
-- **Payments** · Razorpay (fully gated behind env flag — disabled by default, WhatsApp fallback)
+- **Ordering** · Persistent-in-browser shopping cart with variant/quantity validation and WhatsApp order summaries
+- **Payments API** · Razorpay endpoints remain gated; storefront order submission is via WhatsApp
 - **Custom-order enquiries** · Saved to MySQL **and** emailed to the studio via SMTP (Nodemailer)
 - **Product image pipeline** · Manual folder drop + `/api/upload` token-protected endpoint + CLI helper
 - **SEO** · Semantic HTML, OG / Twitter Cards, JSON-LD Organization schema
@@ -144,14 +145,12 @@ sequenceDiagram
     API-->>Store: 200 { products[] }
     Store-->>Shopper: rendered gallery + stock badges
 
-    Note over Shopper,DB: (4) Purchase (gated)
-    Shopper->>Store: click "Buy Now"
-    Store->>API: POST /api/razorpay/order<br/>{ productId }
-    API->>DB: SELECT product · INSERT payments
-    API-->>Store: { keyId, orderId, amount }
-    Store->>Shopper: Razorpay Checkout
-    Shopper->>API: POST /api/razorpay/verify<br/>{ signature }
-    API->>DB: UPDATE payments SET status='paid'
+    Note over Shopper,Store: (4) WhatsApp cart order
+    Shopper->>Store: Choose variant · Add to cart
+    Shopper->>Store: Enter quantity for each item
+    Store->>Shopper: Validate required colours and quantities
+    Shopper->>Store: Continue on WhatsApp
+    Store->>Shopper: Pre-filled itemized order summary
 ```
 
 ### Admin authentication (HMAC cookie)
@@ -226,6 +225,30 @@ erDiagram
         VARCHAR product_type
         VARCHAR status "new|accepted|completed"
         DATETIME created_at
+    }
+    store_orders {
+        VARCHAR(64) id PK
+        VARCHAR customer_name
+        VARCHAR email
+        TEXT delivery_address
+        TEXT billing_address
+        BIGINT total_amount
+        VARCHAR status "new|accepted|ready|completed"
+        TINYINT payment_received
+        TINYINT addresses_confirmed
+        DATETIME accepted_at
+        DATETIME ready_at
+        DATETIME completed_at
+    }
+    store_order_items {
+        VARCHAR(64) id PK
+        VARCHAR(64) order_id FK
+        VARCHAR product_id
+        VARCHAR product_name
+        VARCHAR colour
+        INT unit_price
+        INT requested_quantity
+        INT available_quantity
     }
     contacts { VARCHAR(64) id PK }
     newsletter { VARCHAR(255) email PK }
@@ -319,9 +342,9 @@ All config lives in `.env`. Copy `.env.example`-style values from below and adju
 |---|---|
 | `RAZORPAY_KEY_ID` | Test/Live Key ID from Razorpay Dashboard |
 | `RAZORPAY_KEY_SECRET` | Corresponding secret (never expose) |
-| `NEXT_PUBLIC_BUY_NOW_ENABLED` | `false` hides Buy Now button; `true` shows it (Razorpay still requires keys) |
+| `NEXT_PUBLIC_BUY_NOW_ENABLED` | Gates the legacy Razorpay order API; storefront ordering currently submits a validated cart through WhatsApp |
 
-### SMTP (custom order emails)
+### SMTP (customer order emails)
 | Var | Notes |
 |---|---|
 | `SMTP_HOST` | e.g. `smtp-mail.outlook.com`, `smtp.gmail.com`, `smtp.sendgrid.net` |
@@ -330,9 +353,11 @@ All config lives in `.env`. Copy `.env.example`-style values from below and adju
 | `SMTP_USER` | SMTP username |
 | `SMTP_PASSWORD` | SMTP password / app password |
 | `SMTP_FROM` | `SutraKriti <sutrakriti.help@outlook.com>` |
-| `ORDERS_EMAIL` | Where new custom-order emails are sent |
+| `ORDERS_EMAIL` | Sender/reply address for customer order acceptance and ready-for-delivery emails; studio custom-order notices are also sent here |
 
-If SMTP is not configured, orders are still saved to MySQL; email is silently skipped and `emailStatus` in the API response is `skipped`.
+Cart orders are still recorded when SMTP is unavailable, but the admin cannot
+accept them or mark them ready until SMTP and `ORDERS_EMAIL` are configured.
+Custom-order enquiry notifications remain best-effort.
 
 ### Upload API
 | Var | Purpose |
@@ -447,9 +472,37 @@ Response:
 `{ email }` → upserted in `newsletter` table.
 
 ### `POST /api/razorpay/order`
-**Gated.** Requires `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, AND `NEXT_PUBLIC_BUY_NOW_ENABLED=true`.
+**Gated legacy API.** The storefront cart currently submits orders through WhatsApp. This endpoint requires `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, AND `NEXT_PUBLIC_BUY_NOW_ENABLED=true`.
 - If any is missing → `503 { error: 'payment_unconfigured', whatsappNumber }`.
-- Otherwise creates a Razorpay order, records it in `payments`, returns Checkout params.
+- Otherwise creates a Razorpay order, records it in `payments`, and returns Checkout params.
+
+### Storefront cart ordering
+Shoppers select a product colour in its product dialog when there are multiple
+variants, then add the product to the cart. **All displayed product prices
+include delivery charges**, shown alongside product prices, in the cart, and in
+the order summary. No additional delivery charge is added at checkout. The cart
+is stored in the shopper's browser (`localStorage`) and is not an inventory
+reservation. On `/cart`, each item requires a positive whole-number quantity;
+colour variants must have a specific colour selected. Shoppers must also enter
+a name, email, delivery address, and billing address; these details are stored
+in MySQL with the order before WhatsApp opens. **UPI is the only supported
+payment method for now.** The WhatsApp message includes the order reference,
+item details, delivery-inclusive prices and total, and a request for the
+studio's UPI details.
+
+In the admin dashboard, open **WhatsApp Orders** to review each order. Enter an
+available quantity for every line (zero means unavailable), confirm the saved
+addresses, and mark UPI payment received before accepting. Partial orders are
+allowed when at least one requested item is available. Acceptance emails the
+confirmed quantities and addresses from `ORDERS_EMAIL`. When the order is ready
+for delivery, **Mark Ready & Email Invoice** generates a branded PDF invoice
+with the SutraKriti logo and emails it to the customer. Orders can then be
+marked delivered.
+
+`POST /api/orders` persists validated customer and cart details. Admin actions
+are authenticated under `/api/admin/store-orders`; acceptance and ready-for-
+delivery actions are blocked unless their required checks and email delivery
+succeed.
 
 ### `POST /api/razorpay/verify`
 Verifies HMAC signature. On success → marks `payments.status = 'paid'`.
@@ -592,6 +645,8 @@ Auto-created on first request; also via `node scripts/init-db.js`.
 | `products` | **Persisted product catalogue** — name, price, category, description, JSON `images` / `colors`, flags (`is_new`, `is_bestseller`, `per_piece`, `per_pair`, `per_bouquet`, `is_active`), `stock_quantity` + `low_stock_threshold`, and `sort_order`. The admin Products editor exposes mutually exclusive **per Piece**, **per Pair**, and **per Bouquet** units; the storefront appends the selected unit. Managed via the admin dashboard **Products** tab or the `/api/admin/products` endpoints. |
 | `inventory_movements` | **Append-only stock audit trail**. Every stock change (via API or the dashboard) writes a row with `delta`, `reason` (`restock` / `sale` / `return` / `damage` / `correction` / `initial` / `set`), `note` and the resulting `stock_quantity`. FK → `products.id` (cascade delete). |
 | `custom_orders` | Bespoke enquiries from the Custom Order modal |
+| `store_orders` | Submitted WhatsApp cart orders, customer details, addresses, payment/address review state, and lifecycle timestamps |
+| `store_order_items` | Product and price snapshots, selected colour, requested quantity, and admin-confirmed available quantity for each order line |
 | `contacts` | Contact-form submissions |
 | `newsletter` | Email subscribers (email is PK) |
 | `payments` | Razorpay orders & verification results |
@@ -669,19 +724,21 @@ upload. Next.js serves optimized responsive WebP variants; keep the app's
 
 ---
 
-## 💳 Enabling Razorpay Buy Now
+## 💳 Razorpay API configuration (optional)
+
+The active storefront checkout submits the cart to WhatsApp. Razorpay order
+endpoints remain gated for future integration and do not replace the cart
+workflow.
 
 1. Log into <https://dashboard.razorpay.com> → **Account & Settings → API Keys**.
 2. Generate **Test Keys** first (recommended).
-3. Set in `.env`:
+3. Configure the API in `.env` if needed:
    ```
    RAZORPAY_KEY_ID=rzp_test_xxxxx
    RAZORPAY_KEY_SECRET=xxxxx
    NEXT_PUBLIC_BUY_NOW_ENABLED=true
    ```
-4. Restart the app. **Buy Now** now appears on every product modal.
-5. Test with Razorpay’s [test cards](https://razorpay.com/docs/payments/payments/test-card-details/). No real money moves.
-6. When ready, switch to **Live** keys.
+4. Restart the app. These settings enable the API only; the storefront remains WhatsApp cart-based.
 
 ---
 
@@ -713,14 +770,19 @@ All palette tokens are exposed as CSS variables (see `app/globals.css`) and as T
 All backend endpoints are covered by the internal `deep_testing_backend_nextjs` runner. Manual smoke tests:
 
 ```bash
+npm run test:orders
 curl -s http://localhost:3000/api/health
 curl -s http://localhost:3000/api/products | jq '.products|length'
 curl -s -X POST http://localhost:3000/api/custom-order \
   -H 'Content-Type: application/json' \
-  -d '{"name":"Test","contact":"+911111111111"}'
+  -d '{"name":"Test","contact":"+911111111111","email":"test@example.com"}'
 curl -s -X POST http://localhost:3000/api/newsletter \
   -H 'Content-Type: application/json' -d '{"email":"a@b.com"}'
 ```
+
+The order tests exercise WhatsApp message contents, admin acceptance gates,
+customer email rendering, and branded invoice PDF generation without creating
+database orders or sending email.
 
 ---
 
@@ -735,7 +797,7 @@ curl -s -X POST http://localhost:3000/api/newsletter \
 
 - **Single client `page.js`** — keeps motion, state and section composition co-located; simpler to audit for an MVP. Sub-components can later graduate to `components/` when they need reuse.
 - **Products persisted in MySQL** — the `products` + `inventory_movements` tables replace the static `lib/products.js` catalogue. `lib/products.js` remains as a first-run seed source only. Manage everything from the `/admin` **Products** tab.
-- **Payment gating** — the whole checkout is safe to ship with keys missing. The UX degrades gracefully to a pre-filled WhatsApp message.
+- **WhatsApp cart checkout** — cart quantities and required colour variants are validated before the itemized order opens in WhatsApp. Razorpay routes remain a separate gated API.
 - **Email + DB together** — double-writing custom orders (DB + email) guarantees the studio never misses an enquiry, even if one channel fails.
 - **No MongoDB** — MySQL is more familiar in shared-hosting environments like MilesWeb and easier to back up.
 

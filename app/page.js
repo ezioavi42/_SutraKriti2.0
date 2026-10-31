@@ -16,18 +16,14 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/co
 import { toast, Toaster } from 'sonner'
 import { CATEGORIES as PRODUCT_CATEGORIES } from '@/lib/categories'
 import { DEFAULT_GALLERY, galleryImagesFromUrls } from '@/lib/gallery'
+import { addCartProduct, cartItemCount, readCart, WHATSAPP_NUMBER, writeCart } from '@/lib/cart'
 import SiteImage from '@/components/site-image'
 
-const WHATSAPP_NUMBER = '917777932385'
 const IG_URL = 'https://www.instagram.com/_sutrakriti'
 const EMAIL = 'info@sutrakriti.com'
 
 const CATEGORIES = ['All', ...PRODUCT_CATEGORIES.map(category => category.name)]
 const getPriceUnit = product => product.perPiece ? 'per Piece' : product.perPair ? 'per Pair' : product.perBouquet ? 'per Bouquet' : ''
-const formatPrice = product => {
-  const unit = getPriceUnit(product)
-  return `₹${Number(product.price).toLocaleString('en-IN')}${unit ? ` ${unit}` : ''}`
-}
 
 function ProductPrice({ product, className = '' }) {
   const unit = getPriceUnit(product)
@@ -35,6 +31,7 @@ function ProductPrice({ product, className = '' }) {
     <span className={`inline-flex min-w-0 flex-col ${className}`}>
       <span className="whitespace-nowrap">₹{Number(product.price).toLocaleString('en-IN')}</span>
       {unit && <span className="text-[0.75em] leading-tight">{unit}</span>}
+      <span className="text-[0.55em] leading-tight text-charcoal/60">Delivery included</span>
     </span>
   )
 }
@@ -66,7 +63,7 @@ const WHYS = [
 ]
 
 const FAQS = [
-  { q: 'How do I place an order and what is the payment process?', a: 'For collection pieces, tap “Order on WhatsApp” on any product — this opens WhatsApp with your product details pre-filled. For custom orders, fill the Custom Order form (or message us on WhatsApp) with your colours, size, occasion and a reference image. In both cases, after a short discussion about your piece, payment must be made in advance via UPI and/or a secured payment link — details are shared with you on our WhatsApp Business account. Only once payment is confirmed do we reserve materials and either dispatch (collection) or begin crafting (custom).' },
+  { q: 'How do I place an order and what is the payment process?', a: 'Add collection pieces to your cart, choose a colour when variants are available, and enter a quantity for each item. All displayed product prices include delivery charges. Continue to WhatsApp to send us your order summary; we will confirm availability and the expected delivery time. UPI is the only supported payment method for now, and we will share the UPI details on WhatsApp. For custom orders, fill the Custom Order form or message us on WhatsApp with your colours, size, occasion and a reference image.' },
   { q: 'How long does a custom order take?', a: 'Depending on complexity, custom orders typically take 2–4 weeks after payment. We will confirm the exact timeline for your piece before starting.' },
   { q: 'Do you ship internationally?', a: 'Yes, we ship worldwide. International orders take 10–21 business days after dispatch.' },
   { q: 'How should I care for my crochet piece?', a: 'Hand wash in cold water with mild detergent, reshape while damp and dry flat. Avoid direct sunlight.' },
@@ -171,7 +168,7 @@ function LogoMark({ className = '' }) {
   )
 }
 
-function Nav({ onOpenCustom }) {
+function Nav({ onOpenCustom, cartCount }) {
   const [scrolled, setScrolled] = useState(false)
   useEffect(() => {
     const on = () => setScrolled(window.scrollY > 40)
@@ -200,6 +197,11 @@ function Nav({ onOpenCustom }) {
         </nav>
         <div className="hidden md:flex items-center gap-3">
           <Button onClick={onOpenCustom} variant="ghost" className="text-charcoal hover:bg-beige">Custom Order</Button>
+          <Button asChild variant="outline" className="rounded-full border-charcoal/20">
+            <a href="/cart" aria-label={`Shopping cart, ${cartCount} items`}>
+              <ShoppingBag className="mr-2 h-4 w-4" /> Cart{cartCount > 0 ? ` (${cartCount})` : ''}
+            </a>
+          </Button>
           <Button asChild className="btn-luxury bg-terracotta hover:bg-[color:var(--sk-terracotta-dark)] text-white rounded-full px-5">
             <a href="#collections">Shop <ArrowRight className="ml-1 h-4 w-4" /></a>
           </Button>
@@ -216,6 +218,7 @@ function Nav({ onOpenCustom }) {
             <nav className="mt-8 flex flex-col gap-5">
               {items.map(i => <a key={i.href} href={i.href} className="text-lg text-charcoal">{i.label}</a>)}
               <Button onClick={onOpenCustom} variant="outline" className="mt-4">Custom Order</Button>
+              <Button asChild variant="outline"><a href="/cart"><ShoppingBag className="mr-2 h-4 w-4" /> Cart{cartCount > 0 ? ` (${cartCount})` : ''}</a></Button>
               <Button asChild className="bg-terracotta text-white"><a href="#collections">Shop Collection</a></Button>
             </nav>
           </SheetContent>
@@ -987,71 +990,17 @@ function ProductGallery({ images, name }) {
   )
 }
 
-function ProductModal({ product, open, onClose, onCustom }) {
-  const [busy, setBusy] = useState(false)
+function ProductModal({ product, open, onClose, onCustom, onAddToCart }) {
+  const [selectedColor, setSelectedColor] = useState('')
+  useEffect(() => {
+    const colors = product?.colors || []
+    setSelectedColor(colors.length === 1 ? colors[0] : '')
+  }, [product?.id, open])
+
   if (!product) return null
-  const buyEnabled = (process.env.NEXT_PUBLIC_BUY_NOW_ENABLED || 'false').toLowerCase() === 'true'
-  const buyNow = async () => {
-    setBusy(true)
-    try {
-      const r = await fetch('/api/razorpay/order', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ productId: product.id }) })
-      if (r.status === 503) {
-        toast.message('Online payment is being set up. Opening WhatsApp for direct order.')
-        const priceStr = formatPrice(product)
-        const colours = product.colors?.length ? `\nColours: ${product.colors.join(', ')}` : ''
-        const t = `Hello SutraKriti, I would like to order the following piece from your collection:
-
-\u2022 Product: ${product.name}
-\u2022 Category: ${product.category}
-\u2022 Price: ${priceStr}${colours}
-\u2022 Reference: ${product.id}
-
-Could you please confirm:
-1) Availability of this piece
-2) A secured payment link / UPI details
-3) Expected delivery time to my location
-
-Thank you!`
-        window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(t)}`, '_blank')
-        return
-      }
-      const data = await r.json()
-      if (!r.ok) { toast.error(data?.error || 'Payment error'); return }
-      const opts = {
-        key: data.keyId, amount: data.amount, currency: data.currency,
-        name: 'SutraKriti', description: data.product.name, image: data.product.image, order_id: data.orderId,
-        theme: { color: '#B76A4B' },
-        handler: async (resp) => {
-          const v = await fetch('/api/razorpay/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(resp) })
-          const j = await v.json()
-          if (j.ok) toast.success('Payment successful — we will be in touch shortly.')
-          else toast.error('Payment verification failed. Please try again or contact us.')
-        },
-      }
-      const rzp = new window.Razorpay(opts)
-      rzp.open()
-    } catch (e) {
-      toast.error('Something went wrong.')
-    } finally { setBusy(false) }
-  }
-  const orderWhats = () => {
-    const priceStr = formatPrice(product)
-    const colours = product.colors?.length ? `\nColours: ${product.colors.join(', ')}` : ''
-    const t = `Hello SutraKriti, I would like to order the following piece from your collection:
-
-\u2022 Product: ${product.name}
-\u2022 Category: ${product.category}
-\u2022 Price: ${priceStr}${colours}
-\u2022 Reference: ${product.id}
-
-Could you please confirm:
-1) Availability of this piece
-2) A secured payment link / UPI details
-3) Expected delivery time to my location
-
-Thank you!`
-    window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(t)}`, '_blank')
-  }
+  const colors = product.colors || []
+  const colorRequired = colors.length > 1
+  const canAddToCart = !colorRequired || colors.includes(selectedColor)
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -1076,29 +1025,33 @@ Thank you!`
                 <Info label="Care" value={product.care} />
                 <Info label="Delivery" value={product.delivery} />
               </div>
-              {product.colors?.length ? (
+              {colors.length ? (
                 <div className="mt-5">
-                  <div className="text-[10px] tracking-[0.2em] uppercase text-charcoal/50">Available in</div>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {product.colors.map(c => <span key={c} className="text-xs rounded-full border border-beige px-3 py-1 bg-ivory">{c}</span>)}
-                  </div>
+                  <label htmlFor="product-order-colour" className="text-[10px] tracking-[0.2em] uppercase text-charcoal/50">
+                    Choose colour{colorRequired ? ' *' : ''}
+                  </label>
+                  <select
+                    id="product-order-colour"
+                    value={selectedColor}
+                    onChange={event => setSelectedColor(event.target.value)}
+                    required={colorRequired}
+                    className="mt-2 h-11 w-full rounded-lg border border-beige bg-ivory px-3 text-sm text-charcoal"
+                    data-testid="product-order-color"
+                  >
+                    {colorRequired && <option value="" disabled>Choose a colour</option>}
+                    {colors.map(color => <option key={color} value={color}>{color}</option>)}
+                  </select>
                 </div>
               ) : null}
-              <div className="mt-7 flex flex-col sm:flex-row gap-2">
-                {buyEnabled && (
-                  <Button onClick={buyNow} disabled={busy} className="btn-luxury bg-terracotta hover:bg-[color:var(--sk-terracotta-dark)] text-white rounded-full h-11 flex-1">
-                    {busy ? 'Opening…' : 'Buy Now'} <ShoppingBag className="ml-2 h-4 w-4" />
-                  </Button>
-                )}
-                <Button onClick={orderWhats} className={`rounded-full h-11 flex-1 ${buyEnabled ? 'bg-transparent border border-charcoal/20 text-charcoal hover:bg-beige' : 'btn-luxury bg-terracotta hover:bg-[color:var(--sk-terracotta-dark)] text-white'}`}>
-                  Order on WhatsApp <MessageCircle className="ml-2 h-4 w-4" />
-                </Button>
-              </div>
-              {!buyEnabled && (
-                <div className="mt-2 text-[11px] text-charcoal/50 tracking-wide">
-                  Online checkout coming soon. For now, orders are placed via WhatsApp.
-                </div>
-              )}
+              {colorRequired && !canAddToCart && <p className="mt-2 text-xs text-charcoal/60">Choose a colour before adding this product to your cart.</p>}
+              <Button
+                onClick={() => canAddToCart && onAddToCart(product, selectedColor)}
+                disabled={!canAddToCart}
+                className="mt-7 btn-luxury h-11 w-full rounded-full bg-terracotta text-white hover:bg-[color:var(--sk-terracotta-dark)] disabled:cursor-not-allowed disabled:opacity-50"
+                data-testid="add-product-to-cart"
+              >
+                Add to cart <ShoppingBag className="ml-2 h-4 w-4" />
+              </Button>
               <button onClick={() => { onClose(); onCustom() }} className="mt-4 text-sm text-charcoal/70 link-underline">Want it in a different colour or size? Request a custom piece →</button>
             </div>
           </div>
@@ -1189,8 +1142,40 @@ function FloatingCTA({ onOpenCustom }) {
 function App() {
   const [products, setProducts] = useState([])
   const [gallery, setGallery] = useState(DEFAULT_GALLERY)
+  const [cartCount, setCartCount] = useState(0)
   const [viewing, setViewing] = useState(null)
   const [customOpen, setCustomOpen] = useState(false)
+
+  useEffect(() => {
+    const syncCartCount = () => {
+      try {
+        setCartCount(cartItemCount(readCart()))
+      } catch (error) {
+        console.error('Failed to read shopping cart:', error)
+        toast.error('Unable to load your saved cart.')
+      }
+    }
+    syncCartCount()
+    window.addEventListener('sutrakriti-cart-updated', syncCartCount)
+    window.addEventListener('storage', syncCartCount)
+    return () => {
+      window.removeEventListener('sutrakriti-cart-updated', syncCartCount)
+      window.removeEventListener('storage', syncCartCount)
+    }
+  }, [])
+
+  const addToCart = (product, selectedColor) => {
+    try {
+      const nextCart = addCartProduct(readCart(), product, selectedColor)
+      writeCart(nextCart)
+      setCartCount(cartItemCount(nextCart))
+      setViewing(null)
+      toast.success(`${product.name} added to your cart`)
+    } catch (error) {
+      console.error('Failed to save shopping cart:', error)
+      toast.error('Could not add this product to your cart. Please try again.')
+    }
+  }
 
   useEffect(() => {
     const controller = new AbortController()
@@ -1225,7 +1210,7 @@ function App() {
   return (
     <div className="relative">
       <Toaster position="top-center" richColors closeButton />
-      <Nav onOpenCustom={() => setCustomOpen(true)} />
+      <Nav onOpenCustom={() => setCustomOpen(true)} cartCount={cartCount} />
       <Hero onOpenCustom={() => setCustomOpen(true)} />
       <TrustMarquee />
       <StorySection />
@@ -1241,7 +1226,7 @@ function App() {
       <Newsletter />
       <Footer onOpenCustom={() => setCustomOpen(true)} />
 
-      <ProductModal product={viewing} open={!!viewing} onClose={() => setViewing(null)} onCustom={() => setCustomOpen(true)} />
+      <ProductModal product={viewing} open={!!viewing} onClose={() => setViewing(null)} onCustom={() => setCustomOpen(true)} onAddToCart={addToCart} />
       <CustomOrderModal open={customOpen} onClose={() => setCustomOpen(false)} />
       <FloatingCTA onOpenCustom={() => setCustomOpen(true)} />
     </div>
