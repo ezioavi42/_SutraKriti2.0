@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence, useScroll, useTransform, useMotionValue, useSpring } from 'framer-motion'
 import {
   ArrowRight, ArrowUpRight, Sparkles, Heart, Leaf, Gift, ShieldCheck, Palette, Feather, Award,
-  Instagram, Mail, MessageCircle, Star, ChevronDown, ChevronLeft, ChevronRight, ShoppingBag, Menu, Send, Truck, Package, Scissors
+  Instagram, Mail, MessageCircle, Share2, Star, ChevronDown, ChevronLeft, ChevronRight, ShoppingBag, Menu, Send, Truck, Package, Scissors, Minus, Plus
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,6 +16,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/co
 import { toast, Toaster } from 'sonner'
 import { CATEGORIES as PRODUCT_CATEGORIES } from '@/lib/categories'
 import { DEFAULT_GALLERY, galleryImagesFromUrls } from '@/lib/gallery'
+import { createProductShareUrl, getSharedProductId } from '@/lib/product-links'
 import { addCartProduct, cartItemCount, readCart, WHATSAPP_NUMBER, writeCart } from '@/lib/cart'
 import SiteImage from '@/components/site-image'
 
@@ -24,6 +25,13 @@ const EMAIL = 'info@sutrakriti.com'
 
 const CATEGORIES = ['All', ...PRODUCT_CATEGORIES.map(category => category.name)]
 const getPriceUnit = product => product.perPiece ? 'per Piece' : product.perPair ? 'per Pair' : product.perBouquet ? 'per Bouquet' : ''
+
+function clearSharedProductQuery() {
+  const url = new URL(window.location.href)
+  if (!url.searchParams.has('product')) return
+  url.searchParams.delete('product')
+  window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
+}
 
 function ProductPrice({ product, className = '' }) {
   const unit = getPriceUnit(product)
@@ -579,40 +587,43 @@ function Catalogue({ products, onView }) {
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-5 md:gap-8">
-          {filtered.map((p, i) => (
-            <button
-              key={p.id}
-              onClick={() => onView(p)}
-              className="group text-left"
-            >
-              <div className="relative overflow-hidden rounded-[1.25rem] aspect-[4/5] bg-beige">
-                <SiteImage
-                  src={p.image}
-                  alt={p.name}
-                  fill
-                  sizes="(max-width: 768px) 50vw, (max-width: 1200px) 25vw, 22vw"
-                  className="object-cover transition-transform duration-500 group-hover:scale-105"
-                />
-                <div className="absolute top-3 left-3 flex gap-1">
-                  {p.new && <Badge className="bg-sage text-white border-0">New</Badge>}
-                  {p.bestseller && <Badge className="bg-terracotta text-white border-0">Bestseller</Badge>}
-                </div>
-                <div className="absolute inset-x-3 bottom-3 flex items-center justify-between opacity-0 translate-y-3 group-hover:opacity-100 group-hover:translate-y-0 transition-all">
-                  <span className="text-xs px-2.5 py-1 rounded-full bg-white/90 text-charcoal">Quick View</span>
-                  <span className="h-8 w-8 rounded-full bg-terracotta text-white flex items-center justify-center"><ArrowUpRight className="h-4 w-4" /></span>
-                </div>
-              </div>
-              <div className="mt-3 flex min-w-0 flex-col items-start gap-1 md:flex-row md:justify-between md:gap-3">
-                <div className="min-w-0">
+          {filtered.map(p => {
+            return (
+              <article key={p.id} className="group min-w-0" data-testid={`catalogue-product-${p.id}`}>
+                <button
+                  type="button"
+                  onClick={() => onView(p)}
+                  aria-label={`View ${p.name}`}
+                  className="relative block w-full overflow-hidden rounded-[1.25rem] aspect-[4/5] bg-beige text-left"
+                >
+                  <SiteImage
+                    src={p.image}
+                    alt={p.name}
+                    fill
+                    sizes="(max-width: 768px) 50vw, (max-width: 1200px) 25vw, 22vw"
+                    className="object-cover transition-transform duration-500 group-hover:scale-105"
+                  />
+                  <div className="absolute top-3 left-3 flex gap-1">
+                    {p.new && <Badge className="bg-sage text-white border-0">New</Badge>}
+                    {p.bestseller && <Badge className="bg-terracotta text-white border-0">Bestseller</Badge>}
+                  </div>
+                  <span className="absolute inset-x-3 bottom-3 flex items-center justify-between">
+                    <span className="text-xs px-2.5 py-1 rounded-full bg-white/90 text-charcoal">Quick View</span>
+                    <span className="h-8 w-8 rounded-full bg-terracotta text-white flex items-center justify-center"><ArrowUpRight className="h-4 w-4" /></span>
+                  </span>
+                </button>
+                <div className="mt-3 min-w-0">
                   <div className="text-[10px] tracking-[0.2em] uppercase text-charcoal/50">{p.category}</div>
-                  <div className="font-serif text-lg text-charcoal break-words">{p.name}</div>
+                  <button type="button" onClick={() => onView(p)} className="text-left font-serif text-lg text-charcoal break-words hover:text-terracotta">
+                    {p.name}
+                  </button>
+                  <div className="font-serif text-lg text-terracotta">
+                    <ProductPrice product={p} />
+                  </div>
                 </div>
-                <div className="font-serif text-lg text-terracotta">
-                  <ProductPrice product={p} />
-                </div>
-              </div>
-            </button>
-          ))}
+              </article>
+            )
+          })}
         </div>
       </div>
     </section>
@@ -990,11 +1001,13 @@ function ProductGallery({ images, name }) {
   )
 }
 
-function ProductModal({ product, open, onClose, onCustom, onAddToCart }) {
+function ProductModal({ product, open, onClose, onCustom, onAddToCart, onShare }) {
   const [selectedColor, setSelectedColor] = useState('')
+  const [quantity, setQuantity] = useState(1)
   useEffect(() => {
     const colors = product?.colors || []
     setSelectedColor(colors.length === 1 ? colors[0] : '')
+    setQuantity(1)
   }, [product?.id, open])
 
   if (!product) return null
@@ -1018,6 +1031,16 @@ function ProductModal({ product, open, onClose, onCustom, onAddToCart }) {
               <div className="mt-1 font-serif text-2xl text-terracotta">
                 <ProductPrice product={product} />
               </div>
+              <button
+                type="button"
+                onClick={() => onShare(product)}
+                aria-label={`Share ${product.name}`}
+                className="mt-3 inline-flex min-h-9 items-center gap-1.5 rounded-full border border-beige px-3 text-xs text-charcoal/70 transition hover:border-terracotta hover:text-terracotta"
+                data-testid={`share-product-${product.id}`}
+              >
+                <Share2 className="h-3.5 w-3.5" />
+                Share product
+              </button>
               <p className="mt-4 text-charcoal/70 leading-relaxed">{product.description}</p>
               <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
                 <Info label="Material" value={product.material} />
@@ -1043,9 +1066,17 @@ function ProductModal({ product, open, onClose, onCustom, onAddToCart }) {
                   </select>
                 </div>
               ) : null}
+              <div className="mt-5 flex items-center justify-between gap-3">
+                <span className="text-sm text-charcoal/70">Quantity</span>
+                <div className="flex h-10 items-center rounded-md border border-beige bg-ivory">
+                  <button type="button" onClick={() => setQuantity(value => Math.max(1, value - 1))} disabled={quantity <= 1} aria-label={`Decrease ${product.name} quantity`} className="flex h-full w-10 items-center justify-center text-charcoal/70 disabled:opacity-35"><Minus className="h-4 w-4" /></button>
+                  <input type="number" min="1" max="999" step="1" inputMode="numeric" value={quantity} onChange={event => setQuantity(Math.max(1, Math.min(999, Number(event.target.value) || 1)))} aria-label={`Quantity for ${product.name}`} className="h-full w-14 border-x border-beige bg-transparent text-center text-sm" data-testid="product-detail-quantity" />
+                  <button type="button" onClick={() => setQuantity(value => Math.min(999, value + 1))} disabled={quantity >= 999} aria-label={`Increase ${product.name} quantity`} className="flex h-full w-10 items-center justify-center text-charcoal/70 disabled:opacity-35"><Plus className="h-4 w-4" /></button>
+                </div>
+              </div>
               {colorRequired && !canAddToCart && <p className="mt-2 text-xs text-charcoal/60">Choose a colour before adding this product to your cart.</p>}
               <Button
-                onClick={() => canAddToCart && onAddToCart(product, selectedColor)}
+                onClick={() => canAddToCart && onAddToCart(product, selectedColor, quantity)}
                 disabled={!canAddToCart}
                 className="mt-7 btn-luxury h-11 w-full rounded-full bg-terracotta text-white hover:bg-[color:var(--sk-terracotta-dark)] disabled:cursor-not-allowed disabled:opacity-50"
                 data-testid="add-product-to-cart"
@@ -1141,6 +1172,8 @@ function FloatingCTA({ onOpenCustom }) {
 
 function App() {
   const [products, setProducts] = useState([])
+  const [productsLoaded, setProductsLoaded] = useState(false)
+  const [productLoadFailed, setProductLoadFailed] = useState(false)
   const [gallery, setGallery] = useState(DEFAULT_GALLERY)
   const [cartCount, setCartCount] = useState(0)
   const [viewing, setViewing] = useState(null)
@@ -1164,13 +1197,39 @@ function App() {
     }
   }, [])
 
-  const addToCart = (product, selectedColor) => {
+  const openProduct = product => setViewing(product)
+
+  const shareProduct = async product => {
     try {
-      const nextCart = addCartProduct(readCart(), product, selectedColor)
+      const shareUrl = createProductShareUrl(product.id, window.location.origin)
+      if (navigator.share) {
+        await navigator.share({
+          title: product.name,
+          text: `View ${product.name} at SutraKriti`,
+          url: shareUrl,
+        })
+        return
+      }
+      if (!navigator.clipboard?.writeText) {
+        throw new Error('Sharing and clipboard are unavailable')
+      }
+      await navigator.clipboard.writeText(shareUrl)
+      toast.success('Product link copied')
+    } catch (error) {
+      if (error.name === 'AbortError') return
+      console.error('Failed to share product link:', error)
+      toast.error('Unable to share this product. Please try again.')
+    }
+  }
+
+  const addToCart = (product, selectedColor, quantity = 1) => {
+    try {
+      const nextCart = addCartProduct(readCart(), product, selectedColor, quantity)
       writeCart(nextCart)
       setCartCount(cartItemCount(nextCart))
       setViewing(null)
-      toast.success(`${product.name} added to your cart`)
+      clearSharedProductQuery()
+      toast.success(`${quantity} × ${product.name} added to your cart`)
     } catch (error) {
       console.error('Failed to save shopping cart:', error)
       toast.error('Could not add this product to your cart. Please try again.')
@@ -1179,17 +1238,53 @@ function App() {
 
   useEffect(() => {
     const controller = new AbortController()
-    const timeout = window.setTimeout(() => controller.abort(), 8000)
+    let active = true
+    let timedOut = false
+    const timeout = window.setTimeout(() => {
+      timedOut = true
+      controller.abort()
+    }, 8000)
     fetch('/api/products', { signal: controller.signal })
-      .then(r => r.json())
-      .then(d => setProducts(d.products || []))
-      .catch(() => setProducts([]))
+      .then(response => {
+        if (!response.ok) throw new Error(`Product request failed: ${response.status}`)
+        return response.json()
+      })
+      .then(data => {
+        if (!Array.isArray(data.products)) throw new Error('Product response is invalid')
+        if (active) setProducts(data.products)
+      })
+      .catch(error => {
+        if (!active || (error.name === 'AbortError' && !timedOut)) return
+        console.error('Failed to load storefront products:', error)
+        setProductLoadFailed(true)
+        toast.error(timedOut
+          ? 'Loading products timed out. Please refresh and try again.'
+          : 'Unable to load products. Please refresh and try again.')
+      })
       .finally(() => window.clearTimeout(timeout))
+      .finally(() => {
+        if (active) setProductsLoaded(true)
+      })
     return () => {
+      active = false
       window.clearTimeout(timeout)
       controller.abort()
     }
   }, [])
+
+  useEffect(() => {
+    if (!productsLoaded) return
+    const productId = getSharedProductId(window.location.search)
+    if (productId === null || productId === '') return
+    if (productLoadFailed) return
+    const product = products.find(item => String(item.id) === productId)
+    if (product) {
+      setViewing(product)
+      return
+    }
+    toast.error('This product is no longer available.')
+    clearSharedProductQuery()
+  }, [products, productsLoaded, productLoadFailed])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -1215,8 +1310,8 @@ function App() {
       <TrustMarquee />
       <StorySection />
       <PhilosophySection />
-      <Collections products={products} onView={setViewing} />
-      <Catalogue products={products} onView={setViewing} />
+      <Collections products={products} onView={openProduct} />
+      <Catalogue products={products} onView={openProduct} />
       <WhySection />
       <Personalisation onOpenCustom={() => setCustomOpen(true)} />
       <ProcessSection />
@@ -1226,7 +1321,10 @@ function App() {
       <Newsletter />
       <Footer onOpenCustom={() => setCustomOpen(true)} />
 
-      <ProductModal product={viewing} open={!!viewing} onClose={() => setViewing(null)} onCustom={() => setCustomOpen(true)} onAddToCart={addToCart} />
+      <ProductModal product={viewing} open={!!viewing} onShare={shareProduct} onClose={() => {
+        setViewing(null)
+        clearSharedProductQuery()
+      }} onCustom={() => setCustomOpen(true)} onAddToCart={addToCart} />
       <CustomOrderModal open={customOpen} onClose={() => setCustomOpen(false)} />
       <FloatingCTA onOpenCustom={() => setCustomOpen(true)} />
     </div>

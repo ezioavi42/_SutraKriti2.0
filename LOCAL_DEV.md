@@ -192,13 +192,20 @@ Check `curl http://localhost:3000/api/health` → `"mail": true`.
 
 ## 8. Storefront cart ordering
 
-Select a product, choose a colour if it has multiple variants, and add it to
-the cart. On `/cart`, enter a positive whole-number quantity for each item and
-review the itemized order. Enter your name, email, delivery address, and billing
-address before placing the order. The order is saved in MySQL before WhatsApp
-opens. All product prices and order totals include delivery charges; there is
-no additional delivery fee. UPI is the only supported payment method for now,
-and the WhatsApp message asks the studio to send UPI details.
+Select a product in the collection to open its detail view. Choose a quantity
+(default: 1) and a colour if it has multiple variants, then add it to the cart.
+Use the Share product button in the detail view to share a direct link that
+opens that product's detail view. Shared links use the storefront's active
+catalogue; product visibility is controlled by the **Active** checkbox in
+`/admin` → **Products**. An inactive or deleted product cannot be opened using
+an existing link.
+On `/cart`, review the itemized order and enter your name, email, and delivery
+address using separate address-line, city, state/province, postal-code, and
+country fields. Billing is the same as delivery by default; uncheck the
+checkbox to enter a separate billing address. The order is saved in MySQL before
+WhatsApp opens. All product prices and order totals include delivery charges;
+there is no additional delivery fee. UPI is the only supported payment method
+for now, and the WhatsApp message asks the studio to send UPI details.
 
 In `/admin` → **WhatsApp Orders**, enter availability for every item, confirm
 both addresses, and mark UPI payment received before accepting an order.

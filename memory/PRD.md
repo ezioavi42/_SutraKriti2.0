@@ -50,11 +50,17 @@
   reorder images from the defaults or uploaded image library. Changes persist
   in `site_settings`; deleting a selected upload removes it from the saved
   gallery, which returns to defaults if no selected images remain.
-- **Ordering flow**: products are added to a browser-local cart; multi-colour
-  variants require a colour choice, and every cart line requires an explicit
-  positive whole-number quantity. Name, email, delivery address, and billing
-  address are required before submission. The validated order is persisted
-  before WhatsApp opens; all displayed product prices include delivery charges.
+- **Ordering flow**: products are added to a browser-local cart; the product
+  detail view has a quantity selector defaulting to 1. Multi-colour variants
+  require a colour choice, and every cart line requires a positive whole-number
+  quantity. Name, email, and a structured delivery address (address lines, city,
+  state/province, postal code, and country) are required before submission.
+  Billing defaults to delivery, with a checkbox to enter a separate structured
+  billing address. The validated order is persisted before WhatsApp opens; all
+  displayed product prices include delivery charges.
+  Products can be shared from their detail view using a direct link; only
+  active products published through the storefront API can be opened from that
+  link. Product visibility is managed in the admin Products panel.
   Payment is UPI only for now and the message requests UPI details. Admin
   acceptance requires reviewed addresses, payment received, and
   availability recorded for each line; partial availability is supported.

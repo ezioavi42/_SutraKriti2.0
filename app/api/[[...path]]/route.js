@@ -368,6 +368,10 @@ async function handleRoute(request, { params }) {
 
       const whatsappUrl = createWhatsAppOrderUrl(items, {
         orderReference: `SK-${id.slice(0, 8).toUpperCase()}`,
+        customerName,
+        email,
+        deliveryAddress,
+        billingAddress,
       })
       return ok({ ok: true, id, whatsappUrl }, 201)
     }

@@ -299,11 +299,19 @@ a category, drop your files. Auth is your `sk_admin` cookie — no token exposed
 ## 11. WhatsApp cart ordering and optional Razorpay API
 
 The storefront collects products in the customer's browser cart and sends the
-final itemized order to WhatsApp. Customers must choose a colour when a product
-has multiple variants and enter a positive quantity for every cart item before
-the WhatsApp action is enabled. Before submission, customers also provide their
-name, email, delivery address, and billing address. The order and its item/price
-snapshots are persisted before WhatsApp opens. Cart items do not reserve stock.
+final itemized order to WhatsApp. Customers open a product's detail view to
+choose a quantity (default 1) and, when there are multiple variants, a colour.
+Every cart item must have a positive whole-number quantity before the WhatsApp
+action is enabled.
+Before submission, customers provide their name, email, and delivery address
+through separate address-line, city, state/province, postal-code, and country
+fields. Billing defaults to the delivery address; customers can uncheck the
+same-address checkbox to enter separate billing fields. The order and its
+item/price snapshots are persisted before WhatsApp opens. Cart items do not
+reserve stock. Shared product links resolve through the public active-products
+API; products must remain marked **Active** in `/admin` → **Products** to be
+available from their shared links. Deactivated or deleted products are not
+available from old links.
 All displayed product prices, cart line totals, order totals, confirmation
 emails, and invoices include delivery charges; no separate delivery charge is
 added at checkout. The storefront and WhatsApp order template state that UPI is

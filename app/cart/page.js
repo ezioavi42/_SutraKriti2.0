@@ -4,9 +4,55 @@ import { useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, MessageCircle, Minus, Plus, ShoppingBag, Trash2 } from 'lucide-react'
 import SiteImage from '@/components/site-image'
 import {
-  CART_STORAGE_KEY, cartIsOrderable, formatCurrency,
+  CART_STORAGE_KEY, cartIsOrderable, formatCurrency, formatPostalAddress, isPostalAddressComplete,
   readCart, writeCart,
 } from '@/lib/cart'
+
+const EMPTY_ADDRESS = {
+  addressLine1: '',
+  addressLine2: '',
+  city: '',
+  region: '',
+  postalCode: '',
+  country: 'India',
+}
+
+function AddressFields({ type, title, value, onChange }) {
+  const update = (key, nextValue) => onChange(current => ({ ...current, [key]: nextValue }))
+  const autocomplete = field => `${type} ${field}`
+  const inputClass = 'mt-1 h-11 w-full rounded-lg border border-beige bg-cream px-3 text-sm text-charcoal'
+  const fields = [
+    { key: 'addressLine1', label: 'Address line 1', auto: 'address-line1', required: true, wide: true },
+    { key: 'addressLine2', label: 'Apartment, suite, unit (optional)', auto: 'address-line2', required: false, wide: true },
+    { key: 'city', label: 'City', auto: 'address-level2', required: true },
+    { key: 'region', label: 'State / province', auto: 'address-level1', required: true },
+    { key: 'postalCode', label: 'Postal code', auto: 'postal-code', required: true },
+    { key: 'country', label: 'Country', auto: 'country-name', required: true },
+  ]
+
+  return (
+    <fieldset className="space-y-3">
+      <legend className="font-serif text-xl text-charcoal">{title}</legend>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {fields.map(field => (
+          <label key={field.key} className={`block text-xs text-charcoal/70 ${field.wide ? 'sm:col-span-2' : ''}`}>
+            {field.label}{field.required && <span className="text-red-600"> *</span>}
+            <input
+              type="text"
+              autoComplete={autocomplete(field.auto)}
+              maxLength={field.key === 'addressLine1' || field.key === 'addressLine2' ? 255 : 128}
+              required={field.required}
+              value={value[field.key]}
+              onChange={event => update(field.key, event.target.value)}
+              className={inputClass}
+              data-testid={`${type}-${field.key}`}
+            />
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  )
+}
 
 export default function CartPage() {
   const [cart, setCart] = useState([])
@@ -18,9 +64,10 @@ export default function CartPage() {
   const [customer, setCustomer] = useState({
     customerName: '',
     email: '',
-    deliveryAddress: '',
-    billingAddress: '',
   })
+  const [deliveryAddress, setDeliveryAddress] = useState({ ...EMPTY_ADDRESS })
+  const [billingAddress, setBillingAddress] = useState({ ...EMPTY_ADDRESS })
+  const [billingSameAsDelivery, setBillingSameAsDelivery] = useState(true)
 
   useEffect(() => {
     try {
@@ -47,7 +94,10 @@ export default function CartPage() {
     [cart]
   )
   const canOrder = cartIsOrderable(cart)
-  const customerDetailsValid = Object.values(customer).every(value => value.trim())
+  const customerDetailsValid = Boolean(
+    customer.customerName.trim() && customer.email.trim() && isPostalAddressComplete(deliveryAddress) &&
+    (billingSameAsDelivery || isPostalAddressComplete(billingAddress))
+  )
 
   const resetCart = () => {
     try {
@@ -64,7 +114,7 @@ export default function CartPage() {
     event.preventDefault()
     if (!canOrder || submitting) return
     if (!customerDetailsValid) {
-      setOrderError('Complete your name, email, delivery address, and billing address.')
+      setOrderError('Complete your name, email, and required address fields.')
       return
     }
     const whatsappWindow = window.open('about:blank', '_blank')
@@ -76,7 +126,11 @@ export default function CartPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...customer,
+          customerName: customer.customerName.trim(),
+          email: customer.email.trim(),
+          deliveryAddress: formatPostalAddress(deliveryAddress),
+          billingAddress: formatPostalAddress(billingSameAsDelivery ? deliveryAddress : billingAddress),
+          billingAddressSameAsDelivery: billingSameAsDelivery,
           items: cart.map(item => ({
             productId: item.productId,
             selectedColor: item.selectedColor,
@@ -101,7 +155,10 @@ export default function CartPage() {
         setOrderError('Your order was saved. Use the WhatsApp link below to continue.')
       }
       setCart([])
-      setCustomer({ customerName: '', email: '', deliveryAddress: '', billingAddress: '' })
+      setCustomer({ customerName: '', email: '' })
+      setDeliveryAddress({ ...EMPTY_ADDRESS })
+      setBillingAddress({ ...EMPTY_ADDRESS })
+      setBillingSameAsDelivery(true)
       try {
         writeCart([])
       } catch {
@@ -122,7 +179,15 @@ export default function CartPage() {
           <a href="/#catalogue" className="inline-flex items-center gap-2 text-sm text-charcoal/75 hover:text-charcoal">
             <ArrowLeft className="h-4 w-4" /> Continue shopping
           </a>
-          <a href="/" className="font-serif text-xl text-charcoal">SutraKriti</a>
+          <a href="/" aria-label="SutraKriti home" className="inline-flex h-12 w-12 items-center justify-center">
+            <SiteImage
+              src="/brand/sutrakriti-logo.png"
+              alt="SutraKriti"
+              width={96}
+              height={96}
+              className="h-full w-full object-contain"
+            />
+          </a>
         </div>
       </header>
 
@@ -282,30 +347,34 @@ export default function CartPage() {
                     className="mt-1 h-11 w-full rounded-lg border border-beige bg-cream px-3 text-sm text-charcoal"
                   />
                 </label>
-                <label className="block text-xs text-charcoal/70">
-                  Delivery address <span className="text-red-600">*</span>
-                  <textarea
-                    autoComplete="shipping street-address"
-                    maxLength={2000}
-                    rows={3}
-                    required
-                    value={customer.deliveryAddress}
-                    onChange={event => setCustomer({ ...customer, deliveryAddress: event.target.value })}
-                    className="mt-1 w-full rounded-lg border border-beige bg-cream p-3 text-sm text-charcoal"
+                <AddressFields
+                  type="shipping"
+                  title="Delivery address"
+                  value={deliveryAddress}
+                  onChange={setDeliveryAddress}
+                />
+                <label className="flex items-start gap-2 rounded-lg border border-beige bg-cream p-3 text-sm text-charcoal/80">
+                  <input
+                    type="checkbox"
+                    checked={billingSameAsDelivery}
+                    onChange={event => {
+                      const same = event.target.checked
+                      if (!same) setBillingAddress({ ...deliveryAddress })
+                      setBillingSameAsDelivery(same)
+                    }}
+                    className="mt-0.5 h-4 w-4 accent-[color:var(--sk-terracotta)]"
+                    data-testid="billing-same-as-delivery"
                   />
+                  <span>Billing address is the same as delivery address</span>
                 </label>
-                <label className="block text-xs text-charcoal/70">
-                  Billing address <span className="text-red-600">*</span>
-                  <textarea
-                    autoComplete="billing street-address"
-                    maxLength={2000}
-                    rows={3}
-                    required
-                    value={customer.billingAddress}
-                    onChange={event => setCustomer({ ...customer, billingAddress: event.target.value })}
-                    className="mt-1 w-full rounded-lg border border-beige bg-cream p-3 text-sm text-charcoal"
+                {!billingSameAsDelivery && (
+                  <AddressFields
+                    type="billing"
+                    title="Billing address"
+                    value={billingAddress}
+                    onChange={setBillingAddress}
                   />
-                </label>
+                )}
               </div>
               {orderError && <p role="alert" className="mt-3 rounded-lg bg-red-50 p-3 text-xs text-red-800">{orderError}</p>}
               <button

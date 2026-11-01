@@ -477,15 +477,25 @@ Response:
 - Otherwise creates a Razorpay order, records it in `payments`, and returns Checkout params.
 
 ### Storefront cart ordering
-Shoppers select a product colour in its product dialog when there are multiple
-variants, then add the product to the cart. **All displayed product prices
-include delivery charges**, shown alongside product prices, in the cart, and in
+Shoppers select a product to open its detail dialog, where they can choose a
+quantity (default: 1) and select a colour if there are multiple variants before
+adding it to the cart. A Share product button in the detail dialog shares a
+direct link that opens that product's detail dialog. Shared links resolve
+against the active products exposed by the storefront API. In `/admin` →
+**Products**, keep a product marked **Active** for it to appear and remain
+available from shared links; deactivated or deleted products cannot be opened
+from an old link. **All displayed product
+prices include delivery
+charges**, shown alongside product prices, in the cart, and in
 the order summary. No additional delivery charge is added at checkout. The cart
 is stored in the shopper's browser (`localStorage`) and is not an inventory
 reservation. On `/cart`, each item requires a positive whole-number quantity;
 colour variants must have a specific colour selected. Shoppers must also enter
-a name, email, delivery address, and billing address; these details are stored
-in MySQL with the order before WhatsApp opens. **UPI is the only supported
+a name, email, and delivery address using separate address-line, city,
+state/province, postal-code, and country fields. Billing defaults to delivery;
+unchecking the checkbox reveals separate billing-address fields. Both
+addresses are stored in MySQL with the order before WhatsApp opens. **UPI is
+the only supported
 payment method for now.** The WhatsApp message includes the order reference,
 item details, delivery-inclusive prices and total, and a request for the
 studio's UPI details.
@@ -770,6 +780,8 @@ All palette tokens are exposed as CSS variables (see `app/globals.css`) and as T
 All backend endpoints are covered by the internal `deep_testing_backend_nextjs` runner. Manual smoke tests:
 
 ```bash
+npm test
+# Backwards-compatible order-test alias:
 npm run test:orders
 curl -s http://localhost:3000/api/health
 curl -s http://localhost:3000/api/products | jq '.products|length'
@@ -779,6 +791,9 @@ curl -s -X POST http://localhost:3000/api/custom-order \
 curl -s -X POST http://localhost:3000/api/newsletter \
   -H 'Content-Type: application/json' -d '{"email":"a@b.com"}'
 ```
+
+`npm test` runs the Node.js test files, including storefront product-link,
+cart/order, invoice, and email tests.
 
 The order tests exercise WhatsApp message contents, admin acceptance gates,
 customer email rendering, and branded invoice PDF generation without creating
